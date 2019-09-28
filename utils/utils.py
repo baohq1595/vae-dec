@@ -1,4 +1,4 @@
-from sklearn.utils.linear_assignment_ import linear_assignment
+from scipy.optimize import linear_sum_assignment
 import numpy as np
 
 def cluster_accuracy(predicted: np.array , target: np.array):
@@ -11,5 +11,5 @@ def cluster_accuracy(predicted: np.array , target: np.array):
     for i in range(predicted.size):
         w[predicted[i], target[i]] += 1
     
-    ind = linear_assignment(w.max() - w)
-    return sum([w[i, j] for i, j in ind]) * 1.0 / predicted.size, w
+    ind_1, ind_2 = linear_sum_assignment(w.max() - w)
+    return sum([w[i, j] for i, j in zip(ind_1, ind_2)]) * 1.0 / predicted.size, w

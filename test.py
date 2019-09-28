@@ -12,7 +12,7 @@ if __name__ == '__main__':
     dimensions = [784, 500, 500, 2000, 10]
     model_params = {
         'decoder_final_activation': 'sigmoid',
-        'epochs': 20,
+        'epochs': 100,
         'save_path': 'output/model',
         'dataset_name': 'mnist'
     }
