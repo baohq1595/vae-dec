@@ -50,16 +50,17 @@ class VAE(nn.Module):
         # Decoder block
         dec_hidden_layers = nn.Sequential()
         dec_hidden_layers.add_module('hidden_layer_0',
-            nn.Linear(self.latent_dim, self.hidden_dims[i]))
+            nn.Linear(self.latent_dim, self.hidden_dims[-1]))
         dec_hidden_layers.add_module('h_layer_act_0',
             nn.ReLU())
+        reversed_hidden_dims = list(reversed(self.hidden_dims))
         for i, _ in enumerate(reversed(self.hidden_dims)):
-            if i == (len(self.hidden_dims) - 1):
+            if i == (len(reversed_hidden_dims) - 1):
                 dec_hidden_layers.add_module('hidden_layer_{}'.format(i + 1),
-                    nn.Linear(self.hidden_dims[i], self.latent_dim)),
+                    nn.Linear(reversed_hidden_dims[i], self.embedding_dim)),
             else:
                 dec_hidden_layers.add_module('hidden_layer_{}'.format(i + 1),
-                    nn.Linear(self.hidden_dims[i], self.hidden_dims[i + 1])),
+                    nn.Linear(reversed_hidden_dims[i], reversed_hidden_dims[i + 1])),
                 dec_hidden_layers.add_module('h_layer_act_{}'.format(i + 1), nn.ReLU())
         
         # Final activation function of decoder depends on data
@@ -114,8 +115,7 @@ class VAE(nn.Module):
         return z
     
     def forward(self, x):
-        z_mean, z_log_var = self.encode(x)
-        latent = self.sampling(z_mean, z_log_var)
+        latent, z_mean, z_log_var = self.encode(x)
         x_hat = self.decode(latent)
 
-        return x_hat, z_mean
+        return x_hat, latent, z_mean, z_log_var
