@@ -155,6 +155,7 @@ class ClusteringBasedVAE(nn.Module):
 
             # For each epoch, log the p_c_z accuracy
             with torch.no_grad():
+                mean_accuracy = 0.0
                 for i, data in enumerate(val_dataloader):
                     # Get z value
                     x = data[0].to(self.device)
@@ -167,9 +168,9 @@ class ClusteringBasedVAE(nn.Module):
                     # Cluster latent space
                     gamma = self.cluster(latent)
                     sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
-                    accuracy = cluster_accuracy(sample, labels)
+                    mean_accuracy += cluster_accuracy(sample, labels)[0]
 
-                    print('accuracy p(c|z): %0.8f' % accuracy[0])
+                print('accuracy p(c|z): %0.8f' % mean_accuracy)
 
         torch.save(self.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
             .format(strftime("%Y-%m-%d-%H-%M", gmtime())
