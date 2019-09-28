@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import math
 import os
 from time import gmtime, strftime
+import numpy as np
 
 from model.vae import VAE
 from utils.utils import cluster_accuracy
@@ -25,8 +26,8 @@ class Clustering(nn.Module):
         temp_z = torch.transpose(z.repeat(self.n_centroids, 1, 1), 0, 1)
 
         # Add 1 dimension to self.mu_param, self.lambda_param
-        temp_mu = (self.mu_param[None, :, :]).repeat(batch_size, 1, 1, 1)
-        temp_lambda = (self.lambda_param[None, :, :]).repeat(batch_size, 1, 1, 1)
+        temp_mu = (self.mu_param[None, :, :]).repeat(batch_size, 1, 1)
+        temp_lambda = (self.lambda_param[None, :, :]).repeat(batch_size, 1, 1)
 
         # Add 2 dimensions to self.theta_param
         temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size())
@@ -93,7 +94,6 @@ class ClusteringBasedVAE(nn.Module):
         q_c_x = p_c_z / torch.sum(p_c_z, dim=-1, keepdim=True)
         gamma_t = q_c_x.repeat(self.latent_dim, 1, 1).transpose(0, 1)
 
-        aaa = - 0.5 * torch.sum(temp_z_log_var, dim=-1)
         loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
             torch.sum(
                 0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
@@ -154,6 +154,7 @@ class ClusteringBasedVAE(nn.Module):
                 for i, data in enumerate(val_dataloader):
                     # Get z value
                     x = data[0]
+                    labels = data[1].cpu().detach().numpy()
                     if dataset_name == 'mnist':
                         x = x.view(x.size()[0], -1)
                     
@@ -161,7 +162,8 @@ class ClusteringBasedVAE(nn.Module):
 
                     # Cluster latent space
                     gamma = self.cluster(latent)
-                    accuracy = cluster_accuracy(np.argmax(gamma.cpu().detach().numpy(), axis=1), labels)
+                    sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
+                    accuracy = cluster_accuracy(sample, labels)
 
                     print('accuracy p(c|z): %0.8f' % accuracy[0])
 
