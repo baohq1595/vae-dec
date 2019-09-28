@@ -29,6 +29,7 @@ class VAE(nn.Module):
         self.hidden_dims = dimensions[1:-1]
         self.latent_dim = dimensions[-1]
         self.dec_final_act = kwargs['decoder_final_activation']
+        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
         # Construct layers for encoder and decoder block
         # Encoder block
@@ -110,7 +111,7 @@ class VAE(nn.Module):
             z_mean: mean value of a gaussian.
             z_log_var: log of variance of a gaussian.
         '''
-        epsilon = torch.randn(z_mean.size())
+        epsilon = torch.randn(z_mean.size()).to(self.device)
         z = z_mean + torch.exp(z_log_var / 2) * epsilon
         return z
     

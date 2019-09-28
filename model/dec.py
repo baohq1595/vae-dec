@@ -17,6 +17,7 @@ class Clustering(nn.Module):
         self.theta_param = nn.Parameter(torch.ones(self.n_centroids, dtype=torch.float32) / self.n_centroids)
         self.mu_param = nn.Parameter(torch.zeros((self.latent_dim, self.n_centroids), dtype=torch.float32))
         self.lambda_param = nn.Parameter(torch.ones((self.latent_dim, self.n_centroids), dtype=torch.float32))
+        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
     def forward(self, z: torch.Tensor):
         '''
@@ -30,11 +31,11 @@ class Clustering(nn.Module):
         temp_lambda = (self.lambda_param[None, :, :]).repeat(batch_size, 1, 1)
 
         # Add 2 dimensions to self.theta_param
-        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size())
+        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size()).to(self.device)
 
         temp_p_c_z = torch.exp(
             torch.sum(
-                torch.log(temp_theta) - 0.5 * torch.log(torch.Tensor([2 * math.pi]) * temp_lambda) - 
+                torch.log(temp_theta) - 0.5 * math.log(2 * math.pi) * temp_lambda - 
                 (temp_z - temp_mu) ** 2 / (2 * temp_lambda),
                 dim=1
             )
@@ -50,6 +51,7 @@ class ClusteringBasedVAE(nn.Module):
         self.cluster = Clustering(n_clusters, self.latent_dim)
         self.is_logits = kwargs.get('logits', True)
         self.alpha = alpha
+        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
         
         if self.is_logits:
             self.resconstruction_loss = nn.modules.loss.MSELoss()
@@ -81,7 +83,7 @@ class ClusteringBasedVAE(nn.Module):
         temp_mu = self.cluster.mu_param[None, :, :].repeat(batch_size, 1, 1)
         temp_lambda = self.cluster.lambda_param[None, :, :].repeat(batch_size, 1, 1)
         temp_theta = self.cluster.theta_param[None, None, :] * torch.ones(
-                            batch_size, self.latent_dim, self.cluster.n_centroids)
+                            batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
 
         p_c_z = torch.exp(
             torch.sum(
@@ -108,8 +110,10 @@ class ClusteringBasedVAE(nn.Module):
         return loss.mean()
 
     def __setup_device(self, device):
-        for module in self.models:
-            module.to(device)
+        # for module in self.models:
+        #     module.to(device)
+        self.vae = self.vae.to(device)
+        self.cluster = self.cluster.to(device)
 
     def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader,
                 **params):
@@ -119,7 +123,7 @@ class ClusteringBasedVAE(nn.Module):
         dataset_name = params.get('dataset_name', '')
 
         device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
-        self.__setup_device(device)
+        self.__setup_device(self.device)
 
         for epoch in range(num_epochs):
             for i, data in enumerate(train_dataloader):
@@ -132,7 +136,7 @@ class ClusteringBasedVAE(nn.Module):
                 if dataset_name == 'mnist':
                     x = x.view(x.size()[0], -1)
                 
-                x.to(device)
+                x = x.to(self.device)
 
                 # Forward thru vae model
                 x_decoded, latent, z_mean, z_log_var = self.vae(x)
@@ -153,7 +157,7 @@ class ClusteringBasedVAE(nn.Module):
             with torch.no_grad():
                 for i, data in enumerate(val_dataloader):
                     # Get z value
-                    x = data[0]
+                    x = data[0].to(self.device)
                     labels = data[1].cpu().detach().numpy()
                     if dataset_name == 'mnist':
                         x = x.view(x.size()[0], -1)
