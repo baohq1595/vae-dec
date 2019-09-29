@@ -49,7 +49,7 @@ class ClusteringBasedVAE(nn.Module):
         self.vae = VAE(dimensions, **kwargs)
         self.latent_dim = dimensions[-1]
         self.cluster = Clustering(n_clusters, self.latent_dim)
-        self.is_logits = kwargs.get('logits', True)
+        self.is_logits = kwargs.get('logits', False)
         self.alpha = alpha
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
         
@@ -61,6 +61,8 @@ class ClusteringBasedVAE(nn.Module):
         self.models = nn.ModuleList()
         self.models.append(self.vae)
         self.models.append(self.cluster)
+
+        self.__setup_device(self.device)
 
         
     def forward(self, x):
@@ -117,13 +119,15 @@ class ClusteringBasedVAE(nn.Module):
 
     def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader,
                 **params):
-        optimizer = torch.optim.Adam(self.models.parameters(), lr=0.002, eps=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.002, eps=1e-4)
         num_epochs = params.get('epochs', 10)
         save_path = params.get('save_path', 'output/model')
         dataset_name = params.get('dataset_name', '')
 
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
         device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
-        self.__setup_device(self.device)
 
         for epoch in range(num_epochs):
             for i, data in enumerate(train_dataloader):
