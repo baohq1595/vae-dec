@@ -15,8 +15,6 @@ def pretrain(model, train_dataloader, val_dataloader, **params):
     num_epochs = params.get('epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
-    plt.show()
-    is_first = True
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -49,8 +47,6 @@ def pretrain(model, train_dataloader, val_dataloader, **params):
             # Update models
             optimizer.step()
 
-            plt.show()
-
         # For each epoch, log the p_c_z accuracy
         with torch.no_grad():
             val_loss = 0.0
@@ -72,6 +68,8 @@ def pretrain(model, train_dataloader, val_dataloader, **params):
     torch.save(model.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
         .format(strftime("%Y-%m-%d-%H-%M", gmtime())
     )))
+
+    plt.show()
 
 if __name__ == '__main__':
     dimensions = [784, 500, 500, 2000, 10]

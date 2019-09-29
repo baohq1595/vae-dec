@@ -56,7 +56,7 @@ class ClusteringBasedVAE(nn.Module):
         if self.is_logits:
             self.resconstruction_loss = nn.modules.loss.MSELoss()
         else:
-            self.resconstruction_loss = nn.modules.loss.BCELoss()
+            self.resconstruction_loss = self.binary_cross_entropy
 
         self.models = nn.ModuleList()
         self.models.append(self.vae)
@@ -64,6 +64,8 @@ class ClusteringBasedVAE(nn.Module):
 
         self.__setup_device(self.device)
 
+    def binary_cross_entropy(self, x, r):
+        return -torch.sum(x * torch.log(r + 1e-8) + (1 - x) * torch.log(1 - r + 1e-8), dim=-1)
         
     def forward(self, x):
         x_decoded, latent, z_mean, z_log_var = self.vae(x)

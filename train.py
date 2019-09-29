@@ -15,11 +15,6 @@ def train(model, train_dataloader, val_dataloader, **params):
     num_epochs = params.get('epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
-    plt.show()
-    is_first = True
-
-    # print('Model params:', model.models.parameters())
-    # exit()
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -54,12 +49,6 @@ def train(model, train_dataloader, val_dataloader, **params):
             # Update models
             optimizer.step()
 
-            # if is_first:
-            #     is_first = False
-            plt.show()
-            # else:
-            #     plt.draw()
-
         # For each epoch, log the p_c_z accuracy
         with torch.no_grad():
             mean_accuracy = 0.0
@@ -84,6 +73,8 @@ def train(model, train_dataloader, val_dataloader, **params):
     torch.save(model.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
         .format(strftime("%Y-%m-%d-%H-%M", gmtime())
     )))
+
+    plt.show()
 
 if __name__ == '__main__':
     dimensions = [784, 500, 500, 2000, 10]
