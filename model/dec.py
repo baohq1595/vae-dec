@@ -74,7 +74,7 @@ class ClusteringBasedVAE(nn.Module):
         return x_decoded, latent, z_mean, z_log_var, cluster_output
 
     def criterion(self, x: torch.Tensor, x_decoded: torch.Tensor, z: torch.Tensor,
-                    z_mean: torch.Tensor, z_log_var: torch.Tensor):
+                    z_mean: torch.Tensor, z_log_var: torch.Tensor, gamma: torch.Tensor):
         '''
         TODO Should put the formula here
         '''
@@ -89,16 +89,17 @@ class ClusteringBasedVAE(nn.Module):
         temp_theta = self.cluster.theta_param[None, None, :] * torch.ones(
                             batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
 
-        p_c_z = torch.exp(
-            torch.sum(
-                torch.log(temp_theta) - 0.5 * torch.log(2 * math.pi * temp_lambda) - 
-                (temp_z - temp_mu) ** 2 / (2 * temp_lambda),
-                dim=1
-            )
-        ) + 1e-10
+        # p_c_z = torch.exp(
+        #     torch.sum(
+        #         torch.log(temp_theta) - 0.5 * torch.log(2 * math.pi * temp_lambda) - 
+        #         (temp_z - temp_mu) ** 2 / (2 * temp_lambda),
+        #         dim=1
+        #     )
+        # ) + 1e-10
 
-        q_c_x = p_c_z / torch.sum(p_c_z, dim=-1, keepdim=True)
-        gamma_t = q_c_x.repeat(self.latent_dim, 1, 1).transpose(0, 1)
+        # q_c_x = p_c_z / torch.sum(p_c_z, dim=-1, keepdim=True)
+        # gamma_t = q_c_x.repeat(self.latent_dim, 1, 1).transpose(0, 1)
+        gamma_t = gamma.repeat(self.latent_dim, 1, 1).transpose(0, 1)
 
         loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
             torch.sum(
@@ -108,8 +109,8 @@ class ClusteringBasedVAE(nn.Module):
                 dim=[1, 2]
             )\
             - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
-            - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * q_c_x, dim=-1)\
-            + torch.sum(torch.log(q_c_x) * q_c_x, dim=-1)
+            - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
+            + torch.sum(torch.log(gamma) * gamma, dim=-1)
         
         return loss.mean()
 
