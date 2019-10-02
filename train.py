@@ -11,7 +11,8 @@ from utils.utils import *
 import matplotlib.pyplot as plt
 
 def train(model, train_dataloader, val_dataloader, **params):
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.002, eps=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0002, eps=1e-4)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     num_epochs = params.get('epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
@@ -20,8 +21,9 @@ def train(model, train_dataloader, val_dataloader, **params):
         os.makedirs(save_path)
 
     for epoch in range(num_epochs):
+        train_iters = 0
         for i, data in enumerate(train_dataloader):
-            model.models.zero_grad()
+            model.zero_grad()
 
             # Get only data, ignore label (data[1])
             x = data[0]
@@ -33,13 +35,10 @@ def train(model, train_dataloader, val_dataloader, **params):
             x = x.to(model.device)
 
             # Forward thru vae model
-            x_decoded, latent, z_mean, z_log_var = model.vae(x)
-
-            # Forward to clustering model
-            gamma = model.cluster(latent)
+            x_decoded, latent, z_mean, z_log_var, gamma = model(x)
 
             # Acquire the loss
-            loss = model.criterion(x, x_decoded, latent, z_mean, z_log_var)
+            loss = model.criterion(x, x_decoded, latent, z_mean, z_log_var, gamma)
 
             # Calculate gradients
             loss.backward()
@@ -48,6 +47,11 @@ def train(model, train_dataloader, val_dataloader, **params):
 
             # Update models
             optimizer.step()
+
+            train_iters += 1
+
+            if train_iters % 100 == 0:
+                print('Training loss: ', loss.detach().cpu().numpy())
 
         # For each epoch, log the p_c_z accuracy
         with torch.no_grad():
@@ -60,10 +64,9 @@ def train(model, train_dataloader, val_dataloader, **params):
                 if dataset_name == 'mnist':
                     x = x.view(x.size()[0], -1)
                 
-                x_decoded, latent, z_mean, z_log_var = model.vae(x)
+                x_decoded, latent, z_mean, z_log_var, gamma = model(x)
 
                 # Cluster latent space
-                gamma = model.cluster(latent)
                 sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
                 mean_accuracy += cluster_accuracy(sample, labels)[0]
                 iters += 1
@@ -91,7 +94,8 @@ if __name__ == '__main__':
                                         download=True,
                                         transform=transforms.Compose([
                                                         transforms.ToTensor(),
-                                                        transforms.Normalize((0.1307,), (0.3081,))
+                                                        # transforms.Normalize((0.1307,), (0.3081,)),
+                                                        # transforms.Normalize((0,), (1,))
                                                 ])),
                                 batch_size=32,
                                 shuffle=True)
@@ -100,7 +104,8 @@ if __name__ == '__main__':
                                         download=True,
                                         transform=transforms.Compose([
                                                         transforms.ToTensor(),
-                                                        transforms.Normalize((0.1307,), (0.3081,))
+                                                        # transforms.Normalize((0.1307,), (0.3081,)),
+                                                        # transforms.Normalize((0,), (1,))
                                                 ])),
                                 batch_size=32,
                                 shuffle=True)

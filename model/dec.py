@@ -56,7 +56,9 @@ class ClusteringBasedVAE(nn.Module):
         if self.is_logits:
             self.resconstruction_loss = nn.modules.loss.MSELoss()
         else:
-            self.resconstruction_loss = self.binary_cross_entropy
+            # self.resconstruction_loss = nn.modules.loss.BCEWithLogitsLoss()
+            self.resconstruction_loss = nn.modules.loss.BCELoss()
+            # self.resconstruction_loss = self.binary_cross_entropy
 
         self.models = nn.ModuleList()
         self.models.append(self.vae)
@@ -89,99 +91,45 @@ class ClusteringBasedVAE(nn.Module):
         temp_theta = self.cluster.theta_param[None, None, :] * torch.ones(
                             batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
 
-        # p_c_z = torch.exp(
-        #     torch.sum(
-        #         torch.log(temp_theta) - 0.5 * torch.log(2 * math.pi * temp_lambda) - 
-        #         (temp_z - temp_mu) ** 2 / (2 * temp_lambda),
-        #         dim=1
-        #     )
-        # ) + 1e-10
-
-        # q_c_x = p_c_z / torch.sum(p_c_z, dim=-1, keepdim=True)
-        # gamma_t = q_c_x.repeat(self.latent_dim, 1, 1).transpose(0, 1)
         gamma_t = gamma.repeat(self.latent_dim, 1, 1).transpose(0, 1)
 
-        loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
-            torch.sum(
+        # loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
+        #     torch.sum(
+        #         0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
+        #         torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
+        #         (temp_z_mean - temp_mu) ** 2 / temp_lambda,
+        #         dim=[1, 2]
+        #     )\
+        #     - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
+        #     - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
+        #     + torch.sum(torch.log(gamma) * gamma, dim=-1)
+
+        # try:
+        l1 = self.alpha * self.resconstruction_loss(x_decoded, x)
+        # except:
+        #     print('\nLoss 1: ', x_decoded)
+
+        l2 = torch.sum(
                 0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
                 torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
                 (temp_z_mean - temp_mu) ** 2 / temp_lambda,
                 dim=[1, 2]
-            )\
-            - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
-            - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
-            + torch.sum(torch.log(gamma) * gamma, dim=-1)
+            )
         
+        l3 = 0.5 * torch.sum(z_log_var + 1, dim=-1)
+        l4 = torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)
+        l5 = torch.sum(torch.log(gamma) * gamma, dim=-1)
+
+        loss = l1 + l2 - l3 - l4 + l5
+        
+        # print('\nLoss 1: ', l1)
+        # print('\nLoss 2: ', l2)
+        # print('\nLoss 3: ', l3)
+        # print('\nLoss 4: ', l4)
+        # print('\nLoss 5: ', l5)
+        # print('\nLoss: ', loss.mean())
+
         return loss.mean()
 
     def __setup_device(self, device):
-        # for module in self.models:
-        #     module.to(device)
-        self.vae = self.vae.to(device)
-        self.cluster = self.cluster.to(device)
-
-    def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader,
-                **params):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.002, eps=1e-4)
-        num_epochs = params.get('epochs', 10)
-        save_path = params.get('save_path', 'output/model')
-        dataset_name = params.get('dataset_name', '')
-
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-
-        device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
-
-        for epoch in range(num_epochs):
-            for i, data in enumerate(train_dataloader):
-                self.models.zero_grad()
-
-                # Get only data, ignore label (data[1])
-                x = data[0]
-
-                # Flatten 28x28 to 1x784 on mnist dataset
-                if dataset_name == 'mnist':
-                    x = x.view(x.size()[0], -1)
-                
-                x = x.to(self.device)
-
-                # Forward thru vae model
-                x_decoded, latent, z_mean, z_log_var = self.vae(x)
-
-                # Forward to clustering model
-                gamma = self.cluster(latent)
-
-                # Acquire the loss
-                loss = self.criterion(x, x_decoded, latent, z_mean, z_log_var)
-
-                # Calculate gradients
-                loss.backward()
-
-                # Update models
-                optimizer.step()
-
-            # For each epoch, log the p_c_z accuracy
-            with torch.no_grad():
-                mean_accuracy = 0.0
-                iters = 0
-                for i, data in enumerate(val_dataloader):
-                    # Get z value
-                    x = data[0].to(self.device)
-                    labels = data[1].cpu().detach().numpy()
-                    if dataset_name == 'mnist':
-                        x = x.view(x.size()[0], -1)
-                    
-                    x_decoded, latent, z_mean, z_log_var = self.vae(x)
-
-                    # Cluster latent space
-                    gamma = self.cluster(latent)
-                    sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
-                    mean_accuracy += cluster_accuracy(sample, labels)[0]
-                    iters += 1
-
-                print('accuracy p(c|z): %0.8f' % (mean_accuracy / iters))
-
-        torch.save(self.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
-            .format(strftime("%Y-%m-%d-%H-%M", gmtime())
-        )))
-
+        self.models = self.models.to(device)
