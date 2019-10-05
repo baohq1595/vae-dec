@@ -24,7 +24,8 @@ class Clustering(nn.Module):
         TODO Add formula for calculating gamma ~ q(c|x)
         '''
         batch_size = z.size()[0]
-        temp_z = torch.transpose(z.repeat(self.n_centroids, 1, 1), 0, 1)
+        # temp_z = torch.transpose(z.repeat(self.n_centroids, 1, 1), 0, 1)
+        temp_z = z.repeat(self.n_centroids, 1, 1).permute(1, 2, 0)
 
         # Add 1 dimension to self.mu_param, self.lambda_param
         temp_mu = (self.mu_param[None, :, :]).repeat(batch_size, 1, 1)
@@ -64,7 +65,7 @@ class ClusteringBasedVAE(nn.Module):
         self.models.append(self.vae)
         self.models.append(self.cluster)
 
-        self.__setup_device(self.device)
+        self.to(self.device)
 
     def binary_cross_entropy(self, x, r):
         return -torch.sum(x * torch.log(r + 1e-8) + (1 - x) * torch.log(1 - r + 1e-8), dim=-1)
@@ -81,9 +82,13 @@ class ClusteringBasedVAE(nn.Module):
         TODO Should put the formula here
         '''
         batch_size = x.size()[0]
-        temp_z = torch.transpose(z.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
-        temp_z_mean = torch.transpose(z_mean.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
-        temp_z_log_var = torch.transpose(z_log_var.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
+        # temp_z = torch.transpose(z.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
+        # temp_z_mean = torch.transpose(z_mean.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
+        # temp_z_log_var = torch.transpose(z_log_var.repeat(self.cluster.n_centroids, 1, 1), 0, 1)
+
+        temp_z = z.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
+        temp_z_mean = z_mean.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
+        temp_z_log_var = z_log_var.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
 
         # Add 1 dimension to self.mu_param, self.lambda_param, 2 to self.theta_param
         temp_mu = self.cluster.mu_param[None, :, :].repeat(batch_size, 1, 1)
@@ -91,36 +96,36 @@ class ClusteringBasedVAE(nn.Module):
         temp_theta = self.cluster.theta_param[None, None, :] * torch.ones(
                             batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
 
-        gamma_t = gamma.repeat(self.latent_dim, 1, 1).transpose(0, 1)
+        gamma_t = gamma.repeat(self.latent_dim, 1, 1).permute(1, 0, 2)
 
-        # loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
-        #     torch.sum(
-        #         0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
-        #         torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
-        #         (temp_z_mean - temp_mu) ** 2 / temp_lambda,
-        #         dim=[1, 2]
-        #     )\
-        #     - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
-        #     - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
-        #     + torch.sum(torch.log(gamma) * gamma, dim=-1)
+        loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
+            torch.sum(
+                0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
+                torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
+                (temp_z_mean - temp_mu) ** 2 / temp_lambda,
+                dim=[1, 2]
+            )\
+            - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
+            - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
+            + torch.sum(torch.log(gamma) * gamma, dim=-1)
 
         # try:
         l1 = self.alpha * self.resconstruction_loss(x_decoded, x)
         # except:
         #     print('\nLoss 1: ', x_decoded)
 
-        l2 = torch.sum(
-                0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
-                torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
-                (temp_z_mean - temp_mu) ** 2 / temp_lambda,
-                dim=[1, 2]
-            )
+        # l2 = torch.sum(
+        #         0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
+        #         torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
+        #         (temp_z_mean - temp_mu) ** 2 / temp_lambda,
+        #         dim=[1, 2]
+        #     )
         
-        l3 = 0.5 * torch.sum(z_log_var + 1, dim=-1)
-        l4 = torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)
-        l5 = torch.sum(torch.log(gamma) * gamma, dim=-1)
+        # l3 = 0.5 * torch.sum(z_log_var + 1, dim=-1)
+        # l4 = torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)
+        # l5 = torch.sum(torch.log(gamma) * gamma, dim=-1)
 
-        loss = l1 + l2 - l3 - l4 + l5
+        # loss = l1 + l2 - l3 - l4 + l5
         
         # print('\nLoss 1: ', l1)
         # print('\nLoss 2: ', l2)

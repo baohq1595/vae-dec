@@ -43,6 +43,8 @@ def train(model, train_dataloader, val_dataloader, **params):
             # Calculate gradients
             loss.backward()
 
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+
             plot_grad_flow_lines(model.named_parameters())
 
             # Update models
