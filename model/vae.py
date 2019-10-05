@@ -58,6 +58,7 @@ class Encoder(nn.Module):
         # unpack dimension of vae
         self.hidden_dims = dimensions[:-1]
         self.latent_dim = dimensions[-1]
+        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
         # hidden_layers = [self.embedding_dim, *self.hidden_dims]
 
@@ -65,7 +66,7 @@ class Encoder(nn.Module):
         linear_layers = [nn.Linear(self.hidden_dims[i], self.hidden_dims[i + 1], 'enc_hid_{}'.format(i))
                             for i, _ in enumerate(self.hidden_dims[:-1])]
 
-        self.bn_layers = [nn.BatchNorm1d(self.hidden_dims[i]) for i in range(1, len(self.hidden_dims))]
+        self.bn_layers = [nn.BatchNorm1d(self.hidden_dims[i]).to(self.device) for i in range(1, len(self.hidden_dims))]
         
         self.linear_layers = nn.ModuleList(linear_layers)
         self.sampling = GaussianSampling(self.hidden_dims[-1], self.latent_dim)
@@ -96,13 +97,14 @@ class Decoder(nn.Module):
         self.embedding_dim = dimensions[-1]
         self.hidden_dims = dimensions[:-1]
         self.dec_final_act = kwargs.get('decoder_final_activation', '')
+        self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
         # hidden_layers = [self.latent_dim, *self.hidden_dims]
 
         linear_layers = [nn.Linear(self.hidden_dims[i], self.hidden_dims[i + 1], 'dec_hid_{}'.format(i)) 
                             for i, _ in enumerate(self.hidden_dims[:-1])]
 
-        self.bn_layers = [nn.BatchNorm1d(self.hidden_dims[i]) for i in range(1, len(self.hidden_dims))]
+        self.bn_layers = [nn.BatchNorm1d(self.hidden_dims[i]).to(self.device) for i in range(1, len(self.hidden_dims))]
 
         self.linear_layers = nn.ModuleList(linear_layers)
         self.reconstruction_layer = nn.Linear(self.hidden_dims[-1], self.embedding_dim, 'recons_layer')
@@ -114,7 +116,7 @@ class Decoder(nn.Module):
         elif self.dec_final_act == 'tanh':
             self.final_act = nn.Tanh()
         elif self.dec_final_act == 'relu':
-            self.final_act = nn.ReLU
+            self.final_act = nn.ReLU()
 
     def forward(self, x):
         for linear_layer, bn_layer in zip(self.linear_layers, self.bn_layers):
