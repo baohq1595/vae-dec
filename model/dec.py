@@ -58,8 +58,8 @@ class ClusteringBasedVAE(nn.Module):
             self.resconstruction_loss = nn.modules.loss.MSELoss()
         else:
             # self.resconstruction_loss = nn.modules.loss.BCEWithLogitsLoss()
-            self.resconstruction_loss = nn.modules.loss.BCELoss()
-            # self.resconstruction_loss = self.binary_cross_entropy
+            # self.resconstruction_loss = nn.modules.loss.BCELoss()
+            self.resconstruction_loss = self.binary_cross_entropy
 
         self.models = nn.ModuleList()
         self.models.append(self.vae)
