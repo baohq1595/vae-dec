@@ -32,7 +32,7 @@ class Clustering(nn.Module):
         temp_lambda = (self.lambda_param[None, :, :]).repeat(batch_size, 1, 1)
 
         # Add 2 dimensions to self.theta_param
-        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size())
+        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size()).to(self.device)
 
         temp_p_c_z = torch.exp(
             torch.sum(
