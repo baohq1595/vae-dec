@@ -32,7 +32,7 @@ class Clustering(nn.Module):
         temp_lambda = (self.lambda_param[None, :, :]).repeat(batch_size, 1, 1)
 
         # Add 2 dimensions to self.theta_param
-        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size()).to(self.device)
+        temp_theta = self.theta_param[None, None, :] * torch.ones(temp_mu.size())
 
         temp_p_c_z = torch.exp(
             torch.sum(
@@ -48,6 +48,7 @@ class ClusteringBasedVAE(nn.Module):
     def __init__(self, n_clusters, dimensions, alpha, **kwargs):
         super(ClusteringBasedVAE, self).__init__()
         self.vae = VAE(dimensions, **kwargs)
+        self.embedding_dim = dimensions[0]
         self.latent_dim = dimensions[-1]
         self.cluster = Clustering(n_clusters, self.latent_dim)
         self.is_logits = kwargs.get('logits', False)
@@ -98,7 +99,7 @@ class ClusteringBasedVAE(nn.Module):
 
         gamma_t = gamma.repeat(self.latent_dim, 1, 1).permute(1, 0, 2)
 
-        loss = self.alpha * self.resconstruction_loss(x_decoded, x) + \
+        loss = self.alpha * self.embedding_dim * self.resconstruction_loss(x_decoded, x) + \
             torch.sum(
                 0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2)) +
                 torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
