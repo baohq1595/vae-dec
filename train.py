@@ -58,35 +58,39 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
     Y = []
     with torch.no_grad():
         for x, y in train_dataloader:
+            # Flatten 28x28 to 1x784 on mnist dataset
+            if dataset_name == 'mnist':
+                x = x.view(x.size()[0], -1)
             x = x.to(device)
-            mu, log_var = model.vae.encoder(x)
+            z, mu, log_var = model.vae.encoder(x)
             assert F.mse_loss(mu, log_var) == 0
             Z.append(mu)
             Y.append(y)
 
     Z = torch.cat(Z, 0).detach().cpu().numpy()
-    Y = torch.cat(y, 0).detach().numpy()
-    gmm = GaussianMixture(n_components=model.cluster.n_centroids, covariance_type='diag')
+    Y = torch.cat(Y, 0).detach().numpy()
+    gmm = GaussianMixture(n_components=model.n_centroids, covariance_type='diag')
     predict = gmm.fit_predict(Z)
 
     print('Accuracy = {:.4f}%'.format(cluster_accuracy(predict, Y)[0] * 100))
 
-    model.cluster.mu_param = torch.from_numpy(gmm.means_).to(device).float()
-    model.cluster.lambda_param = torch.log(torch.from_numpy(gmm.covariances_).to(device).float())
-    model.cluster.theta_param = torch.from_numpy(gmm.weights_).to(device).float()
+    model.mu_param.data = torch.from_numpy(gmm.means_).to(device).float()
+    model.lambda_param.data = torch.log(torch.from_numpy(gmm.covariances_).to(device).float())
+    model.theta_param.data = torch.from_numpy(gmm.weights_).to(device).float()
 
-    torch.save(model.state_dict(), 'results/model/pretrained/pretrained_model.pk')
-
-
+    # torch.save(model.state_dict(), 'results/model/pretrained/pretrained_model.pk')
 
 
 def train(model, train_dataloader, val_dataloader, **params):
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0002, eps=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.002, eps=1e-4)
+    steplr = torch.optim.lr_scheduler.StepLR(optimizer, 10, 0.9)
     # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     num_epochs = params.get('epochs', 10)
     num_pretrained_epoch = params.get('pretrained_epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
+
+
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -94,6 +98,7 @@ def train(model, train_dataloader, val_dataloader, **params):
     for epoch in range(num_epochs):
         train_iters = 0
         for i, data in enumerate(train_dataloader):
+            steplr.step()
             model.zero_grad()
 
             # Get only data, ignore label (data[1])
@@ -106,17 +111,14 @@ def train(model, train_dataloader, val_dataloader, **params):
             x = x.to(model.device)
 
             # Forward thru vae model
-            x_decoded, latent, z_mean, z_log_var, gamma = model(x)
 
             # Acquire the loss
-            loss = model.criterion(x, x_decoded, latent, z_mean, z_log_var, gamma)
+            loss = model.elbo_loss(x, 1)
 
             # Calculate gradients
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
-
-            plot_grad_flow_lines(model.named_parameters())
 
             # Update models
             optimizer.step()
@@ -137,7 +139,8 @@ def train(model, train_dataloader, val_dataloader, **params):
                 if dataset_name == 'mnist':
                     x = x.view(x.size()[0], -1)
                 
-                x_decoded, latent, z_mean, z_log_var, gamma = model(x)
+                # x_decoded, latent, z_mean, z_log_var, gamma = model(x)
+                gamma = model(x)
 
                 # Cluster latent space
                 sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
@@ -150,13 +153,14 @@ def train(model, train_dataloader, val_dataloader, **params):
         .format(strftime("%Y-%m-%d-%H-%M", gmtime())
     )))
 
-    plt.show()
+    # plt.show()
 
 if __name__ == '__main__':
     dimensions = [784, 500, 500, 2000, 10]
     model_params = {
         'decoder_final_activation': 'sigmoid',
-        'epochs': 100,
+        'pretrained_epochs': 50,
+        'epochs': 200,
         'save_path': 'output/model',
         'dataset_name': 'mnist'
     }
@@ -183,4 +187,10 @@ if __name__ == '__main__':
                                 batch_size=32,
                                 shuffle=True)
 
+    if torch.cuda.is_available():
+        print('Cuda is available')
+        dec_cluster = dec_cluster.cuda()    
+    else:
+        print('No GPU')
+    pretrain(dec_cluster, train_dataloader, val_dataloader, **model_params)
     train(dec_cluster, train_dataloader, val_dataloader, **model_params)

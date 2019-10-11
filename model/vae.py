@@ -60,8 +60,6 @@ class Encoder(nn.Module):
         self.latent_dim = dimensions[-1]
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
 
-        # hidden_layers = [self.embedding_dim, *self.hidden_dims]
-
         # Constructing layers
         linear_layers = [nn.Linear(self.hidden_dims[i], self.hidden_dims[i + 1], 'enc_hid_{}'.format(i))
                             for i, _ in enumerate(self.hidden_dims[:-1])]
@@ -98,8 +96,6 @@ class Decoder(nn.Module):
         self.hidden_dims = dimensions[:-1]
         self.dec_final_act = kwargs.get('decoder_final_activation', '')
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
-
-        # hidden_layers = [self.latent_dim, *self.hidden_dims]
 
         linear_layers = [nn.Linear(self.hidden_dims[i], self.hidden_dims[i + 1], 'dec_hid_{}'.format(i)) 
                             for i, _ in enumerate(self.hidden_dims[:-1])]
