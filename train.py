@@ -74,9 +74,9 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
 
     print('Accuracy = {:.4f}%'.format(cluster_accuracy(predict, Y)[0] * 100))
 
-    model.mu_param.data = torch.from_numpy(gmm.means_).to(device).float()
-    model.lambda_param.data = torch.log(torch.from_numpy(gmm.covariances_).to(device).float())
-    model.theta_param.data = torch.from_numpy(gmm.weights_).to(device).float()
+    model.mu_c.data = torch.from_numpy(gmm.means_).to(device).float()
+    model.log_sigma_c.data = torch.log(torch.from_numpy(gmm.covariances_).to(device).float())
+    model.pi.data = torch.from_numpy(gmm.weights_).to(device).float()
 
     # torch.save(model.state_dict(), 'results/model/pretrained/pretrained_model.pk')
 
@@ -89,8 +89,6 @@ def train(model, train_dataloader, val_dataloader, **params):
     num_pretrained_epoch = params.get('pretrained_epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
-
-
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -118,7 +116,7 @@ def train(model, train_dataloader, val_dataloader, **params):
             # Calculate gradients
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
 
             # Update models
             optimizer.step()
@@ -159,8 +157,8 @@ if __name__ == '__main__':
     dimensions = [784, 500, 500, 2000, 10]
     model_params = {
         'decoder_final_activation': 'sigmoid',
-        'pretrained_epochs': 50,
-        'epochs': 200,
+        'pretrained_epochs': 1,
+        'epochs': 1,
         'save_path': 'output/model',
         'dataset_name': 'mnist'
     }
