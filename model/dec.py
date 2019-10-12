@@ -23,9 +23,9 @@ class ClusteringBasedVAE(nn.Module):
         self.alpha = alpha
 
         self.n_centroids = n_clusters
-        self.theta_param = nn.Parameter(torch.ones(self.n_centroids, dtype=torch.float32) / self.n_centroids)
-        self.mu_param = nn.Parameter(torch.zeros((self.n_centroids, self.latent_dim), dtype=torch.float32))
-        self.lambda_param = nn.Parameter(torch.ones((self.n_centroids, self.latent_dim), dtype=torch.float32))
+        self.pi = nn.Parameter(torch.ones(self.n_centroids, dtype=torch.float32) / self.n_centroids)
+        self.mu_c = nn.Parameter(torch.zeros((self.n_centroids, self.latent_dim), dtype=torch.float32))
+        self.log_sigma_c = nn.Parameter(torch.ones((self.n_centroids, self.latent_dim), dtype=torch.float32))
         self.device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
         
         if self.is_logits:
@@ -33,18 +33,16 @@ class ClusteringBasedVAE(nn.Module):
         else:
             self.resconstruction_loss = self.binary_cross_entropy
 
-        self.models = nn.ModuleList()
-
     def binary_cross_entropy(self, x, r):
         return -torch.sum(x * torch.log(r + 1e-8) + (1 - x) * torch.log(1 - r + 1e-8), dim=-1)
         
     def forward(self, x):
         x_decoded, latent, z_mean, z_log_var = self.vae(x)
 
-        pi = self.theta_param
-        log_sigmac_c = self.lambda_param
-        mu_c = self.mu_param
-        pzc = torch.exp(torch.log(pi.unsqueeze(0)) + self.log_gaussians(latent, mu_c, log_sigmac_c))
+        pi = self.pi
+        log_sigmac_c = self.log_sigma_c
+        mu_c = self.mu_c
+        pzc = torch.exp(torch.log(pi.unsqueeze(0)) + self.gaussian_pdfs_log(latent, mu_c, log_sigmac_c))
 
         return pzc
 
@@ -52,7 +50,7 @@ class ClusteringBasedVAE(nn.Module):
         det = 1e-10
         res_loss = 0.0
 
-        z, mu, logvar = self.vae.encoder(x)
+        _, mu, logvar = self.vae.encoder(x)
         for l in range(L):
             z = torch.randn_like(mu) * torch.exp(logvar/2) + mu
 
@@ -61,12 +59,12 @@ class ClusteringBasedVAE(nn.Module):
 
         res_loss /= L
         loss = res_loss * x.size(1)
-        pi = self.theta_param
-        log_sigma2_c = self.lambda_param
-        mu_c = self.mu_param
+        pi = self.pi
+        log_sigma2_c = self.log_sigma_c
+        mu_c = self.mu_c
 
         z = torch.randn_like(mu) * torch.exp(logvar / 2) + mu
-        pcz = torch.exp(torch.log(pi.unsqueeze(0)) + self.log_gaussians(z, mu_c, log_sigma2_c)) + det
+        pcz = torch.exp(torch.log(pi.unsqueeze(0)) + self.gaussian_pdfs_log(z, mu_c, log_sigma2_c)) + det
 
         pcz = pcz / (pcz.sum(1).view(-1, 1)) # batch_size*clusters
 
@@ -97,10 +95,10 @@ class ClusteringBasedVAE(nn.Module):
         temp_z_mean = z_mean.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
         temp_z_log_var = z_log_var.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
 
-        # Add 1 dimension to self.mu_param, self.lambda_param, 2 to self.theta_param
-        temp_mu = self.cluster.mu_param[None, :, :].repeat(batch_size, 1, 1)
-        temp_lambda = self.cluster.lambda_param[None, :, :].repeat(batch_size, 1, 1)
-        temp_theta = self.cluster.theta_param[None, None, :] * torch.ones(
+        # Add 1 dimension to self.mu_c, self.log_sigma_c, 2 to self.pi
+        temp_mu = self.cluster.mu_c[None, :, :].repeat(batch_size, 1, 1)
+        temp_lambda = self.cluster.log_sigma_c[None, :, :].repeat(batch_size, 1, 1)
+        temp_theta = self.cluster.pi[None, None, :] * torch.ones(
                             batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
 
         gamma_t = gamma.repeat(self.latent_dim, 1, 1).permute(1, 0, 2)
@@ -113,10 +111,17 @@ class ClusteringBasedVAE(nn.Module):
                 dim=[1, 2]
             )\
             - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
-            - torch.sum(torch.log(self.cluster.theta_param[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
+            - torch.sum(torch.log(self.cluster.pi[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
             + torch.sum(torch.log(gamma) * gamma, dim=-1)
 
         return loss.mean()
 
-    def __setup_device(self, device):
-        self.models = self.models.to(device)
+    def gaussian_pdfs_log(self,x,mus,log_sigma2s):
+        G=[]
+        for c in range(self.n_centroids):
+            G.append(self.gaussian_pdf_log(x,mus[c:c+1,:],log_sigma2s[c:c+1,:]).view(-1,1))
+        return torch.cat(G,1)
+
+    @staticmethod
+    def gaussian_pdf_log(x,mu,log_sigma2):
+        return -0.5*(torch.sum(np.log(np.pi*2)+log_sigma2+(x-mu).pow(2)/torch.exp(log_sigma2),1))
