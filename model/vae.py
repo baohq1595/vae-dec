@@ -72,7 +72,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         for linear_layer, bn_layer in zip(self.linear_layers, self.bn_layers):
             x = linear_layer(x)
-            x = bn_layer(x)
+            # x = bn_layer(x)
             x = F.relu(x)
 
         return self.sampling(x)
@@ -117,7 +117,7 @@ class Decoder(nn.Module):
     def forward(self, x):
         for linear_layer, bn_layer in zip(self.linear_layers, self.bn_layers):
             x = linear_layer(x)
-            x = bn_layer(x)
+            # x = bn_layer(x)
             x = F.relu(x)
         x = self.reconstruction_layer(x)
         x = self.final_act(x)
