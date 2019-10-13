@@ -8,7 +8,7 @@ import numpy as np
 
 import torch.nn.functional as F
 
-from model.vae import VAE
+from model.vae import Decoder, Encoder
 from utils.utils import cluster_accuracy
 from utils.distributions import log_gaussian
 
@@ -16,7 +16,9 @@ from utils.distributions import log_gaussian
 class ClusteringBasedVAE(nn.Module):
     def __init__(self, n_clusters, dimensions, alpha, **kwargs):
         super(ClusteringBasedVAE, self).__init__()
-        self.vae = VAE(dimensions, **kwargs)
+        # self.vae = VAE(dimensions, **kwargs)
+        self.encoder = Encoder(dimensions, **kwargs)
+        self.decoder = Decoder(list(reversed(dimensions)), **kwargs)
         self.embedding_dim = dimensions[0]
         self.latent_dim = dimensions[-1]
         self.is_logits = kwargs.get('logits', False)
@@ -37,7 +39,7 @@ class ClusteringBasedVAE(nn.Module):
         return -torch.sum(x * torch.log(r + 1e-8) + (1 - x) * torch.log(1 - r + 1e-8), dim=-1)
         
     def forward(self, x):
-        x_decoded, latent, z_mean, z_log_var = self.vae(x)
+        latent, z_mean, z_log_var = self.encoder(x)
 
         pi = self.pi
         log_sigmac_c = self.log_sigma_c
@@ -50,11 +52,11 @@ class ClusteringBasedVAE(nn.Module):
         det = 1e-10
         res_loss = 0.0
 
-        _, mu, logvar = self.vae.encoder(x)
+        _, mu, logvar = self.encoder(x)
         for l in range(L):
             z = torch.randn_like(mu) * torch.exp(logvar/2) + mu
 
-            x_decoded = self.vae.decoder(z)
+            x_decoded = self.decoder(z)
             res_loss += F.binary_cross_entropy(x_decoded, x)
 
         res_loss /= L
@@ -82,39 +84,6 @@ class ClusteringBasedVAE(nn.Module):
             G.append(log_gaussian(x, mus[c:c + 1, :], logvars[c:c + 1,:]).view(-1, 1))
         
         return torch.cat(G, 1)
-
-
-    def criterion(self, x: torch.Tensor, x_decoded: torch.Tensor, z: torch.Tensor,
-                    z_mean: torch.Tensor, z_log_var: torch.Tensor, gamma: torch.Tensor):
-        '''
-        TODO Should put the formula here
-        '''
-        batch_size = x.size()[0]
-
-        temp_z = z.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
-        temp_z_mean = z_mean.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
-        temp_z_log_var = z_log_var.repeat(self.cluster.n_centroids, 1, 1).permute(1, 2, 0)
-
-        # Add 1 dimension to self.mu_c, self.log_sigma_c, 2 to self.pi
-        temp_mu = self.cluster.mu_c[None, :, :].repeat(batch_size, 1, 1)
-        temp_lambda = self.cluster.log_sigma_c[None, :, :].repeat(batch_size, 1, 1)
-        temp_theta = self.cluster.pi[None, None, :] * torch.ones(
-                            batch_size, self.latent_dim, self.cluster.n_centroids).to(self.device)
-
-        gamma_t = gamma.repeat(self.latent_dim, 1, 1).permute(1, 0, 2)
-
-        loss = self.alpha * self.embedding_dim * self.resconstruction_loss(x_decoded, x) + \
-            torch.sum(
-                0.5 * gamma_t * (self.latent_dim * math.log(math.pi * 2) +
-                torch.log(temp_lambda) + torch.exp(temp_z_log_var) / temp_lambda +
-                (temp_z_mean - temp_mu) ** 2 / temp_lambda),
-                dim=[1, 2]
-            )\
-            - 0.5 * torch.sum(z_log_var + 1, dim=-1)\
-            - torch.sum(torch.log(self.cluster.pi[None,:].repeat(batch_size, 1, 1)) * gamma, dim=-1)\
-            + torch.sum(torch.log(gamma) * gamma, dim=-1)
-
-        return loss.mean()
 
     def gaussian_pdfs_log(self,x,mus,log_sigma2s):
         G=[]

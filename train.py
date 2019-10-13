@@ -20,8 +20,8 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
     model = model.to(device)
 
     res_loss = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(itertools.chain(model.vae.encoder.parameters(),
-                                model.vae.decoder.parameters()))
+    optimizer = torch.optim.Adam(itertools.chain(model.encoder.parameters(),
+                                model.decoder.parameters()))
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -39,7 +39,8 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
             
             x = x.to(device)
             # Forward pass
-            x_decoded, _, _, _ = model.vae(x)
+            z, _, _ = model.encoder(x)
+            x_decoded = model.decoder(z)
             loss = res_loss(x_decoded, x)
             total_loss = loss.detach().cpu().numpy()
 
@@ -52,7 +53,7 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
         
         print('VAE resconstruction loss: ', total_loss / (len(train_dataloader) / iters))
     
-    model.vae.encoder.sampling.log_var.load_state_dict(model.vae.encoder.sampling.mu.state_dict())
+    model.encoder.sampling.log_var.load_state_dict(model.encoder.sampling.mu.state_dict())
 
     Z = []
     Y = []
@@ -62,7 +63,7 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
             if dataset_name == 'mnist':
                 x = x.view(x.size()[0], -1)
             x = x.to(device)
-            z, mu, log_var = model.vae.encoder(x)
+            z, mu, log_var = model.encoder(x)
             assert F.mse_loss(mu, log_var) == 0
             Z.append(mu)
             Y.append(y)
@@ -95,6 +96,7 @@ def train(model, train_dataloader, val_dataloader, **params):
 
     for epoch in range(num_epochs):
         train_iters = 0
+        total_loss = 0.0
         for i, data in enumerate(train_dataloader):
             steplr.step()
             model.zero_grad()
@@ -107,8 +109,6 @@ def train(model, train_dataloader, val_dataloader, **params):
                 x = x.view(x.size()[0], -1)
             
             x = x.to(model.device)
-
-            # Forward thru vae model
 
             # Acquire the loss
             loss = model.elbo_loss(x, 1)
@@ -123,9 +123,13 @@ def train(model, train_dataloader, val_dataloader, **params):
 
             train_iters += 1
 
-            if train_iters % 100 == 0:
-                print('Training loss: ', loss.detach().cpu().numpy())
+            total_loss += loss.detach().cpu().numpy()
 
+        print('Training loss: ', total_loss / train_iters)
+
+
+        gtruth = []
+        predicted = []
         # For each epoch, log the p_c_z accuracy
         with torch.no_grad():
             mean_accuracy = 0.0
@@ -140,12 +144,17 @@ def train(model, train_dataloader, val_dataloader, **params):
                 # x_decoded, latent, z_mean, z_log_var, gamma = model(x)
                 gamma = model(x)
 
+                gtruth.append(labels)
+
                 # Cluster latent space
                 sample = np.argmax(gamma.cpu().detach().numpy(), axis=1)
-                mean_accuracy += cluster_accuracy(sample, labels)[0]
+                predicted.append(sample)
+                # mean_accuracy += cluster_accuracy(sample, labels)[0]
                 iters += 1
 
-            print('accuracy p(c|z): %0.8f' % (mean_accuracy / iters))
+            gtruth = np.concatenate(gtruth, 0)
+            predicted = np.concatenate(predicted, 0)
+            print('accuracy p(c|z): %0.8f' % cluster_accuracy(predicted,gtruth)[0]*100)
 
     torch.save(model.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
         .format(strftime("%Y-%m-%d-%H-%M", gmtime())
