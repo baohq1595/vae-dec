@@ -69,7 +69,8 @@ class GenomeDataset(Dataset):
 
         # Preprocess labels
         label_list = list(self.match_dict.keys())
-        self.lb_lookup = self.to_onehot_mapping(label_list)
+        self.lb_lookup = self.to_onehot_mapping_2(label_list)
+
 
     
     def to_onehot_mapping(self, lb_list):
@@ -78,6 +79,13 @@ class GenomeDataset(Dataset):
         for i, lb in enumerate(lb_list):
             lb_mapping[lb] = np.zeros(length)
             lb_mapping[lb][i] = 1
+
+        return lb_mapping
+
+    def to_onehot_mapping_2(self, lb_list):
+        lb_mapping = dict()
+        for i, lb in enumerate(lb_list):
+            lb_mapping[lb] = i
 
         return lb_mapping
 
@@ -101,12 +109,12 @@ class GenomeDataset(Dataset):
         for key, genes in self.match_dict.items():
             genes_length = len(genes)
             if idx < genes_length + previous_len:
-                return self.transform(genes[idx - previous_len]), self.lb_lookup[key]
+                return (self.transform(genes[idx - previous_len]), self.lb_lookup[key])
             else:
                 previous_len += genes_length
                 continue
         
-        return None, None
+        return (None, None)
 
 
 if __name__ == "__main__":

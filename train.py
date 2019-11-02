@@ -11,8 +11,17 @@ from model.vae import *
 from model.dec import *
 from utils.utils import *
 import matplotlib.pyplot as plt
+from dataloader.metagenomics_dataset import GenomeDataset
+from transform.gene_transforms import numerize_genome_str
 
+pretrained_save_path = 'model/pretrained/model.pt'
 def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **params):
+    if os.path.exists(pretrained_save_path):
+        model.load_state_dict(torch.load(pretrained_save_path))
+        return
+    else:
+        os.makedirs(os.path.dirname(pretrained_save_path))
+
     num_pretrained_epoch = params.get('pretrained_epochs', 10)
     save_path = params.get('save_path', 'output/model')
     dataset_name = params.get('dataset_name', '')
@@ -21,7 +30,8 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
 
     res_loss = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(itertools.chain(model.encoder.parameters(),
-                                model.decoder.parameters()))
+                                model.decoder.parameters()), lr=0.002)
+    steplr = torch.optim.lr_scheduler.StepLR(optimizer, 5, 0.9)
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -37,12 +47,13 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
             if dataset_name == 'mnist':
                 x = x.view(x.size()[0], -1)
             
+            x = x.float()
             x = x.to(device)
             # Forward pass
-            z, _, _ = model.encoder(x)
-            x_decoded = model.decoder(z)
+            _, z_mu, _ = model.encoder(x)
+            x_decoded = model.decoder(z_mu)
             loss = res_loss(x_decoded, x)
-            total_loss = loss.detach().cpu().numpy()
+            total_loss += loss.detach().cpu().numpy()
 
             # Calculate gradient and optimize
             optimizer.zero_grad()
@@ -51,7 +62,8 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
 
             iters += 1
         
-        print('VAE resconstruction loss: ', total_loss / (len(train_dataloader) / iters))
+        print('VAE resconstruction loss: ', total_loss / iters)
+        steplr.step()
     
     model.encoder.sampling.log_var.load_state_dict(model.encoder.sampling.mu.state_dict())
 
@@ -62,6 +74,8 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
             # Flatten 28x28 to 1x784 on mnist dataset
             if dataset_name == 'mnist':
                 x = x.view(x.size()[0], -1)
+
+            x = x.float()
             x = x.to(device)
             z, mu, log_var = model.encoder(x)
             assert F.mse_loss(mu, log_var) == 0
@@ -72,6 +86,7 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
     Y = torch.cat(Y, 0).detach().numpy()
     gmm = GaussianMixture(n_components=model.n_centroids, covariance_type='diag')
     predict = gmm.fit_predict(Z)
+    
 
     print('Accuracy = {:.4f}%'.format(cluster_accuracy(predict, Y)[0] * 100))
 
@@ -79,7 +94,7 @@ def pretrain(model: ClusteringBasedVAE, train_dataloader, val_dataloader, **para
     model.log_sigma_c.data = torch.log(torch.from_numpy(gmm.covariances_).to(device).float())
     model.pi.data = torch.from_numpy(gmm.weights_).to(device).float()
 
-    # torch.save(model.state_dict(), 'results/model/pretrained/pretrained_model.pk')
+    torch.save(model.state_dict(), pretrained_save_path)
 
 
 def train(model, train_dataloader, val_dataloader, **params):
@@ -154,7 +169,7 @@ def train(model, train_dataloader, val_dataloader, **params):
 
             gtruth = np.concatenate(gtruth, 0)
             predicted = np.concatenate(predicted, 0)
-            print('accuracy p(c|z): %0.8f' % cluster_accuracy(predicted,gtruth)[0]*100)
+            print('accuracy p(c|z): {:0.4f}'.format(cluster_accuracy(predicted,gtruth)[0]*100))
 
     torch.save(model.models.state_dict(), os.path.join(save_path, 'vae-dec-model-{}'
         .format(strftime("%Y-%m-%d-%H-%M", gmtime())
@@ -162,17 +177,28 @@ def train(model, train_dataloader, val_dataloader, **params):
 
     # plt.show()
 
+
+def get_metagenomics_dataloader():
+    gen_transforms = transforms.Compose([
+        numerize_genome_str,
+        transforms.ToTensor()
+    ])
+    genomics_dataset = GenomeDataset('data/gene/L1.fna', transform=numerize_genome_str)
+    dataloader = DataLoader(genomics_dataset, batch_size=32, shuffle=True)
+
+    return dataloader
+
 if __name__ == '__main__':
-    dimensions = [784, 500, 500, 2000, 10]
+    dimensions = [400, 500, 500, 2000, 10]
     model_params = {
-        'decoder_final_activation': 'sigmoid',
+        'decoder_final_activation': 'relu',
         'pretrained_epochs': 1,
         'epochs': 1,
         'save_path': 'output/model',
         'dataset_name': 'mnist'
     }
 
-    dec_cluster = ClusteringBasedVAE(10, dimensions, 1, **model_params)
+    dec_cluster = ClusteringBasedVAE(2, dimensions, 1, **model_params)
 
     train_dataloader = DataLoader(MNIST('data/mnist', train=True, 
                                         download=True,
@@ -194,10 +220,12 @@ if __name__ == '__main__':
                                 batch_size=32,
                                 shuffle=True)
 
+    gen_dataloader = get_metagenomics_dataloader()
+
     if torch.cuda.is_available():
         print('Cuda is available')
         dec_cluster = dec_cluster.cuda()    
     else:
         print('No GPU')
-    pretrain(dec_cluster, train_dataloader, val_dataloader, **model_params)
-    train(dec_cluster, train_dataloader, val_dataloader, **model_params)
+    pretrain(dec_cluster, gen_dataloader, gen_dataloader, **model_params)
+    train(dec_cluster, gen_dataloader, gen_dataloader, **model_params)
