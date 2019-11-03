@@ -57,7 +57,11 @@ class ClusteringBasedVAE(nn.Module):
             z = torch.randn_like(mu) * torch.exp(logvar/2) + mu
 
             x_decoded = self.decoder(z)
-            res_loss += F.binary_cross_entropy(x_decoded, x)
+
+            if self.is_logits:
+                res_loss += F.mse_loss(x_decoded, x)
+            else:
+                res_loss += F.binary_cross_entropy(x_decoded, x)
 
         res_loss /= L
         loss = res_loss * x.size(1)

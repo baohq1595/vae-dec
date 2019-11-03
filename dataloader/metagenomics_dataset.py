@@ -1,9 +1,12 @@
 import os
 import torch
-import re
+import re, random
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.feature_extraction.text import CountVectorizer
+
+from dataloader.utils import generate_k_mer_corpus, ensure_gene_length
 
 class GenomeDataset(Dataset):
     '''
@@ -11,7 +14,7 @@ class GenomeDataset(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, transform=None):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, transform=None):
         '''
         Args:
             fna_file: path to fna file (fasta format).
@@ -33,7 +36,7 @@ class GenomeDataset(Dataset):
 
                     # Update hash label key with gene sting value
                     if hash_label != '':
-                        self.match_dict[hash_label].append(gene_str)
+                        self.match_dict[hash_label].append(ensure_gene_length(k_mer, gene_str))
 
                         # Track the number of genes
                         self._len += 1
@@ -67,10 +70,46 @@ class GenomeDataset(Dataset):
                 else:
                     gene_str = gene_str + line
 
+        # Process gene string to feature types
+        if feature_type == 'bow':
+            self.vocab = generate_k_mer_corpus(k_mer)
+            data = []
+            process_genes = []
+            lb_length = []
+            for key, genes in self.match_dict.items():
+                temp = []
+                for gene in genes:
+                    # Insert space into every k_mer substring to make it looks like word
+                    gene = ' '.join(gene[i: i + k_mer] for i in range(0, len(gene), k_mer))
+                    temp.append(self.compute_bow(gene))
+                # process_genes.extend(temp)
+                data.extend(temp)
+                lb_length.append(len(genes))
+
+            # x = CountVectorizer(dtype=np.float64, max_features=2000, vocabulary=vocab).fit_transform(data)
+            # x = x.astype(np.float32)
+            # x = np.asarray(x.todense())
+
+            prev = 0
+            for i, item in enumerate(self.match_dict.items()):
+                key, genes = item
+                genes = data[prev: prev + lb_length[i]]
+                prev += lb_length[i]
+
+                self.match_dict[key] = genes
+
         # Preprocess labels
         label_list = list(self.match_dict.keys())
         self.lb_lookup = self.to_onehot_mapping_2(label_list)
 
+    def compute_bow(self, gene_str: str):
+        k_mer_parts = gene_str.split(' ')
+        encode_vector = np.zeros(len(self.vocab))
+        for part in k_mer_parts:
+            pos = self.vocab.index(part)
+            encode_vector[pos] += 1
+
+        return encode_vector
 
     
     def to_onehot_mapping(self, lb_list):
@@ -109,7 +148,10 @@ class GenomeDataset(Dataset):
         for key, genes in self.match_dict.items():
             genes_length = len(genes)
             if idx < genes_length + previous_len:
-                return (self.transform(genes[idx - previous_len]), self.lb_lookup[key])
+                data = genes[idx - previous_len]
+                if self.transform:
+                    data = self.transform(data)
+                return (data, self.lb_lookup[key])
             else:
                 previous_len += genes_length
                 continue
@@ -121,8 +163,8 @@ if __name__ == "__main__":
     import sys
     sys.path.append('.')
     from transform.gene_transforms import numerize_genome_str
-    metagene_dataset = GenomeDataset('data/gene/L1.fna', transform=numerize_genome_str)
-    for i in range(100):
+    metagene_dataset = GenomeDataset('data/gene/L1.fna')
+    for i in range(5):
         print(metagene_dataset.__getitem__(i))
 
     print('Total labels: ', metagene_dataset.match_dict.keys())
