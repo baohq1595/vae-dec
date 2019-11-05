@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import CountVectorizer
 
+import sys
+sys.path.append('.')
 from dataloader.utils import generate_k_mer_corpus, ensure_gene_length
 
 class GenomeDataset(Dataset):
@@ -14,9 +16,11 @@ class GenomeDataset(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, feature_type='bow', k_mer=4, transform=None):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, overlap_k_mer=True, transform=None):
         '''
         Args:
+            k_mer: number of nucleotid to combine into a word.
+            overlap_k_mer: True to extract overlapping k_mer from a genome string. False otherwise.
             fna_file: path to fna file (fasta format).
             transform: transformation applied to all samples.
         '''
@@ -74,21 +78,20 @@ class GenomeDataset(Dataset):
         if feature_type == 'bow':
             self.vocab = generate_k_mer_corpus(k_mer)
             data = []
-            process_genes = []
             lb_length = []
             for key, genes in self.match_dict.items():
                 temp = []
                 for gene in genes:
                     # Insert space into every k_mer substring to make it looks like word
-                    gene = ' '.join(gene[i: i + k_mer] for i in range(0, len(gene), k_mer))
-                    temp.append(self.compute_bow(gene))
-                # process_genes.extend(temp)
+                    # or not insert anything if use overlapping kmer
+                    separate_char = '' if overlap_k_mer else ' '
+                    gene = separate_char.join(gene[i: i + k_mer] for i in range(0, len(gene), k_mer))
+
+                    processed_gene = self.compute_bow_overlap(gene, k_mer) if overlap_k_mer else self.compute_bow(gene)
+                    temp.append(processed_gene)
+
                 data.extend(temp)
                 lb_length.append(len(genes))
-
-            # x = CountVectorizer(dtype=np.float64, max_features=2000, vocabulary=vocab).fit_transform(data)
-            # x = x.astype(np.float32)
-            # x = np.asarray(x.todense())
 
             prev = 0
             for i, item in enumerate(self.match_dict.items()):
@@ -111,6 +114,19 @@ class GenomeDataset(Dataset):
 
         return encode_vector
 
+    def compute_bow_overlap(self, gene_str: str, k_mer):
+        encode_vector = np.zeros(len(self.vocab))
+        for i in range(len(gene_str) - 4):
+            sub_k_mer_str = gene_str[i: i + 4]
+            try:
+                idx = self.vocab.index(sub_k_mer_str)
+            except ValueError:
+                sub_k_mer_str = sub_k_mer_str + '_' * (k_mer - len(sub_k_mer_str))
+                print(sub_k_mer_str)
+                idx = self.vocab.index(sub_k_mer_str)
+            encode_vector[idx] += 1
+
+        return encode_vector
     
     def to_onehot_mapping(self, lb_list):
         length = len(lb_list)
@@ -127,16 +143,6 @@ class GenomeDataset(Dataset):
             lb_mapping[lb] = i
 
         return lb_mapping
-
-    # def numerize_genome_str(self, x):
-    #     encoded_x = np.zeros(len(NUCLEOTIDS) * GENOMES_MAX_LEN)
-    #     for i in range(len(x), step=len(NUCLEOTIDS)):
-    #         for j in range(len(NUCLEOTIDS)):
-    #             if encoded_x[i * j + j] == NUCLEOTIDS[j]:
-    #                 encoded_x = 1.0
-        
-    #     return encoded_x
-
 
     def __len__(self):
         # Return len of dataset in number of gene strings
@@ -163,7 +169,7 @@ if __name__ == "__main__":
     import sys
     sys.path.append('.')
     from transform.gene_transforms import numerize_genome_str
-    metagene_dataset = GenomeDataset('data/gene/L1.fna')
+    metagene_dataset = GenomeDataset('data/gene/L1.fna', overlap_k_mer=False)
     for i in range(5):
         print(metagene_dataset.__getitem__(i))
 
