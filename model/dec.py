@@ -60,10 +60,8 @@ class ClusteringBasedVAE(nn.Module):
 
             if self.is_logits:
                 res_loss += F.mse_loss(x_decoded, x)
-                print('Reconstruction loss: mse')
             else:
                 res_loss += F.binary_cross_entropy(x_decoded, x)
-                print('Reconstruction loss: bce')
 
         res_loss /= L
         loss = res_loss * x.size(1)
