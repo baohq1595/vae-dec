@@ -120,7 +120,9 @@ class Decoder(nn.Module):
             # x = bn_layer(x)
             x = F.relu(x)
         x = self.reconstruction_layer(x)
-        x = self.final_act(x)
+
+        if not self.dec_final_act == '':
+            x = self.final_act(x)
 
         return x
 
