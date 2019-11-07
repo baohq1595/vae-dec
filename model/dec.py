@@ -64,7 +64,7 @@ class ClusteringBasedVAE(nn.Module):
                 res_loss += F.binary_cross_entropy(x_decoded, x)
 
         res_loss /= L
-        loss = res_loss * x.size(1)
+        loss = self.alpha * res_loss * x.size(1)
         pi = self.pi
         log_sigma2_c = self.log_sigma_c
         mu_c = self.mu_c
