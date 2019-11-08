@@ -101,7 +101,7 @@ class GenomeDataset(Dataset):
 
                 if is_normalize:
                     genes = genes * np.sqrt(len(genes[0]))
-                    genes = normalize(genes, norm='l2') * 200
+                    genes = normalize(genes, norm='l2') * 200.0
                 self.match_dict[key] = genes
 
         # Preprocess labels
