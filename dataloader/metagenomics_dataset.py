@@ -3,7 +3,7 @@ import torch
 import re, random
 import numpy as np
 from torch.utils.data import Dataset
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, normalize
 from sklearn.feature_extraction.text import CountVectorizer
 
 import sys
@@ -16,7 +16,7 @@ class GenomeDataset(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, feature_type='bow', k_mer=4, overlap_k_mer=True, transform=None):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, overlap_k_mer=True, transform=None, is_normalize=False):
         '''
         Args:
             k_mer: number of nucleotid to combine into a word.
@@ -99,6 +99,8 @@ class GenomeDataset(Dataset):
                 genes = data[prev: prev + lb_length[i]]
                 prev += lb_length[i]
 
+                if is_normalize:
+                    genes = normalize(genes, norm='l2')
                 self.match_dict[key] = genes
 
         # Preprocess labels
