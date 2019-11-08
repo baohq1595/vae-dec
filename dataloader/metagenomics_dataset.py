@@ -100,7 +100,7 @@ class GenomeDataset(Dataset):
                 prev += lb_length[i]
 
                 if is_normalize:
-                    genes = float(genes) * np.sqrt(len(genes[0]))
+                    genes = np.array(genes) * np.sqrt(len(genes[0]))
                     genes = normalize(genes, norm='l2') * 200.0
                 self.match_dict[key] = genes
 
