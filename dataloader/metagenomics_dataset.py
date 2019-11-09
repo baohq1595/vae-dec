@@ -76,7 +76,7 @@ class GenomeDataset_v2(Dataset):
         count_vectorizer = CountVectorizer(self.data)
         self.numeric_data = count_vectorizer.fit_transform(self.data)
         self.numeric_data = np.asarray(self.numeric_data.todense())*np.sqrt(self.numeric_data.shape[1])
-        self.numeric_data = normalize(self.numeric_data, norm='l2') * 200
+        self.numeric_data = normalize(self.numeric_data, norm='l2')
 
         self.lb_mapping = self.to_onehot_mapping_2(set(self.label))
 
@@ -222,7 +222,6 @@ class GenomeDataset(Dataset):
                 idx = self.vocab.index(sub_k_mer_str)
             except ValueError:
                 sub_k_mer_str = sub_k_mer_str + '_' * (k_mer - len(sub_k_mer_str))
-                print(sub_k_mer_str)
                 idx = self.vocab.index(sub_k_mer_str)
             encode_vector[idx] += 1
 
