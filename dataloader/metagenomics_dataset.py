@@ -4,7 +4,7 @@ import re, random
 import numpy as np
 from torch.utils.data import Dataset
 from sklearn.preprocessing import OneHotEncoder, normalize
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
 import sys
 sys.path.append('.')
@@ -16,7 +16,7 @@ class GenomeDataset_v2(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, feature_type='bow', k_mer=4, return_raw=False):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, return_raw=False, use_tfidf=True):
         '''
         Args:
             k_mer: number of nucleotid to combine into a word.
@@ -75,8 +75,13 @@ class GenomeDataset_v2(Dataset):
 
         count_vectorizer = CountVectorizer(self.data)
         self.numeric_data = count_vectorizer.fit_transform(self.data)
+
+        if use_tfidf:
+            self.numeric_data = TfidfTransformer(norm='l2', sublinear_tf=True).fit_transform(self.numeric_data)
+
         self.numeric_data = np.asarray(self.numeric_data.todense())*np.sqrt(self.numeric_data.shape[1])
         self.numeric_data = normalize(self.numeric_data, norm='l2')
+        self.numeric_data = self.numeric_data.astype('float32')
 
         self.lb_mapping = self.to_onehot_mapping_2(set(self.label))
 
