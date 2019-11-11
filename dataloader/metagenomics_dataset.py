@@ -16,7 +16,7 @@ class GenomeDataset_v2(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, feature_type='bow', k_mer=4, return_raw=False, use_tfidf=True):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, return_raw=False, use_tfidf=True, not_return_label=False):
         '''
         Args:
             k_mer: number of nucleotid to combine into a word.
@@ -78,12 +78,14 @@ class GenomeDataset_v2(Dataset):
 
         if use_tfidf:
             self.numeric_data = TfidfTransformer(norm='l2', sublinear_tf=True).fit_transform(self.numeric_data)
+            print('Finished TFIDF.')
 
         self.numeric_data = np.asarray(self.numeric_data.todense())*np.sqrt(self.numeric_data.shape[1])
         self.numeric_data = normalize(self.numeric_data, norm='l2')
         self.numeric_data = self.numeric_data.astype('float32')
 
         self.lb_mapping = self.to_onehot_mapping_2(set(self.label))
+        self.not_return_label = not_return_label
 
     def tokensize_gene_str(self, x: str):
         res_str = ''
@@ -109,6 +111,8 @@ class GenomeDataset_v2(Dataset):
         raw_lb = self.label[idx]
         lb = self.lb_mapping[raw_lb]
         
+        if self.not_return_label:
+            return (data, data)
         return (data, lb)
         
 
