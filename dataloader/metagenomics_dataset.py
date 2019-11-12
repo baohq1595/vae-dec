@@ -208,6 +208,8 @@ class GenomeDataset(Dataset):
                 if is_normalize:
                     genes = np.array(genes) * np.sqrt(len(genes[0]))
                     genes = normalize(genes, norm='l2') * 200.0
+
+                genes = np.asarray(genes, dtype=np.float32)
                 self.match_dict[key] = genes
 
         # Preprocess labels
@@ -280,7 +282,7 @@ if __name__ == "__main__":
     import sys
     sys.path.append('.')
     from transform.gene_transforms import numerize_genome_str
-    metagene_dataset = GenomeDataset_v2('data/gene/L1.fna', return_raw=False)
+    metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
     for i in range(5):
         print(metagene_dataset.__getitem__(i))
 
