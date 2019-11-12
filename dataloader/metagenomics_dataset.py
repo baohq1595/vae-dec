@@ -122,7 +122,7 @@ class GenomeDataset(Dataset):
     '''
 
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
-    def __init__(self, fna_file, feature_type='bow', k_mer=4, overlap_k_mer=True, transform=None, is_normalize=False):
+    def __init__(self, fna_file, feature_type='bow', k_mer=4, overlap_k_mer=True, transform=None, is_normalize=False, not_return_label=False):
         '''
         Args:
             k_mer: number of nucleotid to combine into a word.
@@ -213,6 +213,7 @@ class GenomeDataset(Dataset):
         # Preprocess labels
         label_list = list(self.match_dict.keys())
         self.lb_lookup = self.to_onehot_mapping_2(label_list)
+        self.not_return_label = not_return_label
 
     def compute_bow(self, gene_str: str):
         k_mer_parts = gene_str.split(' ')
@@ -265,6 +266,8 @@ class GenomeDataset(Dataset):
                 data = genes[idx - previous_len]
                 if self.transform:
                     data = self.transform(data)
+                if self.not_return_label:
+                    return (data, data)
                 return (data, self.lb_lookup[key])
             else:
                 previous_len += genes_length
