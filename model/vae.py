@@ -160,6 +160,32 @@ class VAE(nn.Module):
 
         return x_mu, z, mu, log_var
 
+    def _kld(self, z, q_param, p_param=None):
+        """
+        Computes the KL-divergence of
+        some element z.
+
+        KL(q||p) = -∫ q(z) log [ p(z) / q(z) ]
+                 = -E[log p(z) - log q(z)]
+
+        :param z: sample from q-distribuion
+        :param q_param: (mu, log_var) of the q-distribution
+        :param p_param: (mu, log_var) of the p-distribution
+        :return: KL(q||p)
+        """
+        (q_mu, q_log_var) = q_param
+        qz = log_gaussian(z, q_mu, q_log_var)
+
+        if p_param is None:
+            pz = log_standard_gaussian(z)
+        else:
+            (p_mu, p_log_var) = p_param
+            pz = log_gaussian(z, p_mu, p_log_var)
+
+        kl = qz - pz
+
+        return kl
+
     def sample(self, z):
         """
         Given z ~ N(0, I) generates a sample from
