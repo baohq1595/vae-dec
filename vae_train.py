@@ -53,7 +53,6 @@ def train(n_centroids, model, train_dataloader, val_dataloader, optimizer,
     device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
     model = model.to(device)
 
-    gmm = GaussianMixture(n_components=n_centroids, covariance_type='diag')
     best_acc = 0.0
     best_model = None
 
@@ -78,8 +77,7 @@ def train(n_centroids, model, train_dataloader, val_dataloader, optimizer,
 
             # Loss is likelihood loss and kld loss ~ standard normal distribution as prior
             likelihood_loss = likelihood(x_decoded, x)
-            kld_loss = torch.mean(model._kld(z, (mu, log_var), None))
-            # print('==================', kld_loss.shape)
+            kld_loss = torch.sum(model._kld(z, (mu, log_var), None))
             loss = likelihood_loss + kld_loss 
 
             # Calculate gradient and optimize
@@ -121,15 +119,15 @@ def train(n_centroids, model, train_dataloader, val_dataloader, optimizer,
                     x = x.float()
                     x = x.to(device)
                     z, mu, log_var = model.encoder(x)
-                    # assert F.mse_loss(mu, log_var) == 0
                     Z.append(mu)
                     Y.append(y)
 
             Z = torch.cat(Z, 0).detach().cpu().numpy()
             Y = torch.cat(Y, 0).detach().numpy()
+            gmm = GaussianMixture(n_components=n_centroids, covariance_type='diag')
             predict = gmm.fit_predict(Z)
 
-            accuracy = cluster_accuracy(predict, Y)[0] * 100
+            accuracy = cluster_accuracy(predict, Y)[0] * 500
 
             print('Accuracy = {:.4f}%'.format(accuracy))
             if accuracy > best_acc:
@@ -140,7 +138,12 @@ def train(n_centroids, model, train_dataloader, val_dataloader, optimizer,
             if log_visualize:
                 summary_writer.add_scalar('Accuracy', accuracy)
 
-    torch.save(best_model.state_dict(), os.path.join(save_path, 'vae-{}'.format(strftime("%Y-%m-%d-%H-%M-%S", gmtime()))))
+    sub_save_dir = 'vae-{}'.format(strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    save_dir = os.path.join(save_path, sub_save_dir)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    torch.save(best_model.state_dict(), os.path.join(save_dir, 'vae.pt'))
 
 def get_metagenomics_dataloader(data_path):
     gen_transforms = transforms.Compose([
@@ -157,11 +160,11 @@ if __name__ == "__main__":
     sys.path.append('.')
     dimensions = [256, 500, 500, 2000, 10]
     model_params = {
-        'decoder_final_activation': 'relu',
-        'pretrained_epochs': 1,
+        'decoder_final_activation': '',
+        'pretrained_epochs': 100,
         'epochs': 1,
         'save_path': 'output/model',
-        'dataset_name': 'mnist',
+        'dataset_name': 'gene',
         'logits': True
     }
 
@@ -176,5 +179,5 @@ if __name__ == "__main__":
         print('No GPU')
 
     optimizer = torch.optim.SGD(vae.parameters(), lr=0.001, momentum=0.9)
-    train(2, vae, gen_dataloader, gen_dataloader, optimizer, retrain=True)
+    train(2, vae, gen_dataloader, gen_dataloader, optimizer, retrain=True, **model_params)
     # train(dec_cluster, gen_dataloader, gen_dataloader, **model_params)
