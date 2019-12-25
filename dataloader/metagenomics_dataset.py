@@ -1,20 +1,105 @@
 import os
 import torch
+import json
 import re, random
 import numpy as np
 from torch.utils.data import Dataset
-from sklearn.preprocessing import OneHotEncoder, normalize
+from sklearn.preprocessing import OneHotEncoder, normalize, StandardScaler
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from networkx.readwrite import json_graph
+
+from utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
+from graph import build_overlap_graph, metis_partition_groups_seeds
 
 import sys
 sys.path.append('.')
 from dataloader.utils import generate_k_mer_corpus, ensure_gene_length
 
+class GenomeDataset_v3(Dataset):
+    '''
+    Metagenomics dataset for reading simulated data in fasta format (.fna)
+    An optimization step based on graph opertation is used to merge reads that
+    have overlapping reads into a completed genome.
+    '''
+    def __init__(self, fna_file, kmers: list, only_seed=False, is_normalize=True,
+                    graph_file=None, is_serialize=False, is_deserialize=False):
+        '''
+        Args:
+            kmers: a list of kmer values. 
+            fna_file: path to fna file (fasta format).
+            only_seed: only seeds in overlapping graph are used to build features.
+            graph_file: calculated groups and seeds (json).
+        '''
+        # Read fasta dataset
+        print('Reading fna file...')
+        self.reads, self.labels = load_meta_reads(fna_file, type='fasta')
+        self.reads = self.reads[:500]
+        self.labels = self.labels[:500]
+
+        print('Creating document from reads...')
+        dictionary, documents = create_document(self.reads, kmers)
+
+        print('Creating corpus...')
+        corpus = create_corpus(dictionary, documents)
+
+        self.groups = None
+        self.seeds = None
+
+        if is_deserialize:
+            print('Deserializing data...')
+            self.groups, self.seeds = self.deserialize_data(graph_file, self.reads)
+        else:
+            # Build overlapping (reads) graph
+            print('Building graph from scratch...')
+            graph = build_overlap_graph(self.reads, self.labels)
+            print('Partitioning graph...')
+            self.groups, self.seeds = metis_partition_groups_seeds(graph)
+
+        if is_serialize:
+            print('Serializing data to...', graph_file)
+            self.serialize_data(self.reads, self.groups, self.seeds, graph_file)
+
+        print('Computing features...')
+        self.kmer_features = compute_kmer_dist(dictionary, corpus, self.groups, self.seeds, only_seed=only_seed)
+
+        if is_normalize:
+            print('Normalizing...')
+            scaler = StandardScaler()
+            self.kmer_features = scaler.fit_transform(self.kmer_features)
+
+        print('Finish.')
+    
+    def serialize_data(self, reads, groups, seeds, graph_file):
+        serialize_dict = {
+            'groups': groups,
+            'seeds': seeds
+        }
+
+        with open(graph_file, 'w') as fg:
+            json.dump(serialize_dict, fg)
+        
+        return graph_file
+    
+    def deserialize_data(self, graph_file, reads):
+        with open(graph_file, 'r') as fg:
+            data = json.load(fg)
+
+        groups = data['groups']
+        seeds = data['seeds']
+
+        return groups, seeds
+    
+    def __len__(self):
+        return self.kmer_features.shape[0]
+    
+    def __getitem__(self, idx):
+        return self.kmer_features[idx]
+
+
 class GenomeDataset_v2(Dataset):
     '''
     Metagenomics dataset for reading simulated data in fasta format (.fna)
     '''
-
     HASH_PATTERN = r'\([a-f0-9]{40}\)'
     def __init__(self, fna_file, feature_type='bow', k_mer=4, return_raw=False, use_tfidf=True, not_return_label=False):
         '''
@@ -277,14 +362,16 @@ class GenomeDataset(Dataset):
         
         return (None, None)
 
-
 if __name__ == "__main__":
     import sys
     sys.path.append('.')
-    from transform.gene_transforms import numerize_genome_str
-    metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
-    for i in range(5):
-        print(metagene_dataset.__getitem__(i))
+    # from transform.gene_transforms import numerize_genome_str
+    # metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
+    metagene_dataset = GenomeDataset_v3('data/gene/L1.fna', [4], graph_file='graph.json', is_deserialize=True)
+    for i in range(metagene_dataset.__len__()):
+        print(metagene_dataset.__getitem__(i)[:10])
+    # for i in range(5):
+    #     print(metagene_dataset.__getitem__(i))
 
     # a = metagene_dataset.tokensize_gene_str('ATCGATGCAGTAGCTCTAGC')
     # print('Total labels:', a)

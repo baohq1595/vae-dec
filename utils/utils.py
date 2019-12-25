@@ -2,6 +2,7 @@ from scipy.optimize import linear_sum_assignment
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from sklearn.metrics import confusion_matrix
 
 def cluster_accuracy(predicted: np.array , target: np.array):
     assert predicted.size == target.size, ''.join('Different size between predicted\
@@ -62,3 +63,25 @@ def plot_grad_flow_lines(named_parameters):
     plt.ylabel("average gradient")
     plt.title("Gradient flow")
     plt.grid(True)
+
+def assign_cluster_2_reads(groups, y_grp_cl):
+    label_cl_dict=dict()
+
+    for idx, g in enumerate(groups):
+        for r in g:
+            label_cl_dict[r]=y_grp_cl[idx]
+    
+    y_cl=[]
+    for i in sorted(label_cl_dict):
+        y_cl.append(label_cl_dict[i])
+    
+    return y_cl
+
+def eval_quality(y_true, y_pred, n_clusters=NUM_OF_SPECIES):
+    A = confusion_matrix(y_pred, y_true)
+    if len(A) == 1:
+      return 1, 1
+    prec = sum([max(A[:,j]) for j in range(0,n_clusters)])/sum([sum(A[i,:]) for i in range(0,n_clusters)])
+    rcal = sum([max(A[i,:]) for i in range(0,n_clusters)])/sum([sum(A[i,:]) for i in range(0,n_clusters)])
+
+    return prec, rcal
