@@ -77,7 +77,7 @@ def assign_cluster_2_reads(groups, y_grp_cl):
     
     return y_cl
 
-def eval_quality(y_true, y_pred, n_clusters=NUM_OF_SPECIES):
+def eval_quality(y_true, y_pred, n_clusters):
     A = confusion_matrix(y_pred, y_true)
     if len(A) == 1:
       return 1, 1
