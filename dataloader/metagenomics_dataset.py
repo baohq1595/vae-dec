@@ -33,8 +33,8 @@ class GenomeDataset_v3(Dataset):
         # Read fasta dataset
         print('Reading fna file...')
         self.reads, self.labels = load_meta_reads(fna_file, type='fasta')
-        self.reads = self.reads[:500]
-        self.labels = self.labels[:500]
+        self.reads = self.reads
+        self.labels = self.labels
 
         print('Creating document from reads...')
         dictionary, documents = create_document(self.reads, kmers)
