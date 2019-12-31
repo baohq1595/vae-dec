@@ -8,8 +8,8 @@ from sklearn.preprocessing import OneHotEncoder, normalize, StandardScaler
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from networkx.readwrite import json_graph
 
-from utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
-from graph import build_overlap_graph, metis_partition_groups_seeds
+from dataloader.utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
+from dataloader.graph import build_overlap_graph, metis_partition_groups_seeds
 
 import sys
 sys.path.append('.')
