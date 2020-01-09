@@ -6,6 +6,7 @@ import re
 import gensim
 from gensim import corpora
 import itertools as it
+import json
 
 NUCLEOTIDS = ['A', 'T', 'G', 'C']
 def generate_k_mer_corpus(k_val, base_corpus: list=NUCLEOTIDS):

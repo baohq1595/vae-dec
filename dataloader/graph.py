@@ -3,15 +3,18 @@ import numpy as np
 import networkx as nx
 import nxmetis
 
+import sys
+sys.path.append('.')
+
 from dataloader.utils import load_meta_reads
 
-LENGTH_OF_Q_MERS = 4   # q (short: 20, long: 30, 3species: 10)
+LENGTH_OF_Q_MERS = 20   # q (short: 20, long: 30, 3species: 10)
 NUM_SHARED_READS = 5    # m (short: 5, long: 45, 3species: 3)
 
 # parameters for graph partitioning
 MAXIMUM_COMPONENT_SIZE = 200 # R*, S*: 200
 
-def build_overlap_graph(reads, labels, kmer=LENGTH_OF_Q_MERS):
+def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS):
     '''
     Build overlapping graph
     '''
@@ -19,8 +22,8 @@ def build_overlap_graph(reads, labels, kmer=LENGTH_OF_Q_MERS):
     print("Building hash table...")
     lmers_dict=dict()
     for idx, r in enumerate(reads):
-        for j in range(0,len(r)-kmer+1):
-            lmer = r[j:j+kmer]
+        for j in range(0,len(r)-qmer_length+1):
+            lmer = r[j:j+qmer_length]
             if lmer in lmers_dict:
                 lmers_dict[lmer] += [idx]
             else:
@@ -104,28 +107,30 @@ if __name__ == "__main__":
     # print(len([label for label in labels if label == 1]))
     # print(len([labels == 0]))
 
-    G1 = build_overlap_graph(reads[:10], labels[:10])
-    G2 = build_overlap_graph(reads[:10], labels[:10])
-    G3 = build_overlap_graph(reads[:10], labels[:10])
-    G4 = build_overlap_graph(reads[:10], labels[:10])
-    G5 = build_overlap_graph(reads[:10], labels[:10])
+    G1 = build_overlap_graph(reads, labels, 20)
+    # G2 = build_overlap_graph(reads[:10], labels[:10])
+    # G3 = build_overlap_graph(reads[:10], labels[:10])
+    # G4 = build_overlap_graph(reads[:10], labels[:10])
+    # G5 = build_overlap_graph(reads[:10], labels[:10])
     
-    Gs = [G1, G2, G3, G4, G5]
+
+    Gs = [G1]
     g_data_s = []
-    for i, G in enumerate(Gs):
-        g_data = json_graph.node_link_data(G)
-        g_data_s.append(g_data)
+    # for i, G in enumerate(Gs):
+    #     g_data = json_graph.node_link_data(G)
+    #     g_data_s.append(g_data)
+    g_data = json_graph.node_link_data(G1)
 
     # for i, g_data in enumerate(g_data_s):
-    with open('gs.json', 'w') as f:
-        json.dump(g_data_s, f)
+    with open('S2_graph.json', 'w') as f:
+        json.dump(g_data, f)
             
 
-    with open('gs.json', 'r') as f:
+    # with open('gs.json', 'r') as f:
         # json.dump(g_data, f)
-        gdata_s = json.load(f)
+        # gdata_s = json.load(f)
 
-    graphs = []
-    for g_data in g_data_s:
-        graph = json_graph.node_link_graph(g_data)
-        show_graph(graph, NUM_OF_SPECIES)
+    # graphs = []
+    # for g_data in g_data_s:
+    #     graph = json_graph.node_link_graph(g_data)
+    #     show_graph(graph, NUM_OF_SPECIES)

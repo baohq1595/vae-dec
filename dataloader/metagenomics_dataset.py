@@ -8,11 +8,10 @@ from sklearn.preprocessing import OneHotEncoder, normalize, StandardScaler
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from networkx.readwrite import json_graph
 
-from dataloader.utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
-from dataloader.graph import build_overlap_graph, metis_partition_groups_seeds
-
 import sys
 sys.path.append('.')
+from dataloader.utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
+from dataloader.graph import build_overlap_graph, metis_partition_groups_seeds
 from dataloader.utils import generate_k_mer_corpus, ensure_gene_length
 
 class GenomeDataset_v3(Dataset):
@@ -21,7 +20,7 @@ class GenomeDataset_v3(Dataset):
     An optimization step based on graph opertation is used to merge reads that
     have overlapping reads into a completed genome.
     '''
-    def __init__(self, fna_file, kmers: list, only_seed=False, is_normalize=True,
+    def __init__(self, fna_file, kmers: list, qmers, only_seed=False, is_normalize=True,
                     graph_file=None, is_serialize=False, is_deserialize=False):
         '''
         Args:
@@ -51,7 +50,7 @@ class GenomeDataset_v3(Dataset):
         else:
             # Build overlapping (reads) graph
             print('Building graph from scratch...')
-            graph = build_overlap_graph(self.reads, self.labels)
+            graph = build_overlap_graph(self.reads, self.labels, qmers)
             print('Partitioning graph...')
             self.groups, self.seeds = metis_partition_groups_seeds(graph)
 
@@ -367,7 +366,7 @@ if __name__ == "__main__":
     sys.path.append('.')
     # from transform.gene_transforms import numerize_genome_str
     # metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
-    metagene_dataset = GenomeDataset_v3('data/gene/L1.fna', [4], graph_file='graph.json', is_deserialize=True)
+    metagene_dataset = GenomeDataset_v3('data/gene/S2.fna', [4], 20, graph_file='S2_graph.json', is_deserialize=False)
     for i in range(metagene_dataset.__len__()):
         print(metagene_dataset.__getitem__(i)[:10])
     # for i in range(5):
