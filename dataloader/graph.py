@@ -57,7 +57,7 @@ def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS):
     
     return G
 
-def metis_partition_groups_seeds(G):
+def metis_partition_groups_seeds(G, only_seed=False):
     CC = [cc for cc in nx.connected_components(G)]
     GL = []
     for subV in CC:
@@ -72,9 +72,10 @@ def metis_partition_groups_seeds(G):
             GL += [list(subV)]
 
     SL = []
-    for p in GL:
-        pG = nx.subgraph(G, p)
-        SL += [nx.maximal_independent_set(G)]
+    if only_seed:
+        for p in GL:
+            pG = nx.subgraph(G, p)
+            SL += [nx.maximal_independent_set(G)]
 
     return GL, SL
 

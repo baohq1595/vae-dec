@@ -41,8 +41,8 @@ class GenomeDataset_v3(Dataset):
         print('Creating corpus...')
         corpus = create_corpus(dictionary, documents)
 
-        self.groups = None
-        self.seeds = None
+        self.groups = []
+        self.seeds = []
 
         if is_deserialize:
             print('Deserializing data...')
@@ -52,7 +52,7 @@ class GenomeDataset_v3(Dataset):
             print('Building graph from scratch...')
             graph = build_overlap_graph(self.reads, self.labels, qmers)
             print('Partitioning graph...')
-            self.groups, self.seeds = metis_partition_groups_seeds(graph)
+            self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed)
 
         if is_serialize:
             print('Serializing data to...', graph_file)
