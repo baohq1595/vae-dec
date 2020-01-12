@@ -20,7 +20,7 @@ class GenomeDataset_v3(Dataset):
     An optimization step based on graph opertation is used to merge reads that
     have overlapping reads into a completed genome.
     '''
-    def __init__(self, fna_file, kmers: list, qmers, only_seed=False, is_normalize=True,
+    def __init__(self, fna_file, kmers: list, qmers, maximum_group_size=5000, only_seed=False, is_normalize=True,
                     graph_file=None, is_serialize=False, is_deserialize=False):
         '''
         Args:
@@ -52,7 +52,7 @@ class GenomeDataset_v3(Dataset):
             print('Building graph from scratch...')
             graph = build_overlap_graph(self.reads, self.labels, qmers)
             print('Partitioning graph...')
-            self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed)
+            self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed, maximum_group_size=maximum_group_size)
 
         if is_serialize:
             print('Serializing data to...', graph_file)
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     sys.path.append('.')
     # from transform.gene_transforms import numerize_genome_str
     # metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
-    metagene_dataset = GenomeDataset_v3('data/gene/S2.fna', [4], 20, graph_file='S2_graph.json', is_deserialize=False)
+    metagene_dataset = GenomeDataset_v3('data/gene/L1.fna', [4], 20, graph_file='data/gene/processed/L1.json', is_deserialize=False, is_normalize=False)
     for i in range(metagene_dataset.__len__()):
         print(metagene_dataset.__getitem__(i)[:10])
     # for i in range(5):

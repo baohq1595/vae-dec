@@ -57,14 +57,14 @@ def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS):
     
     return G
 
-def metis_partition_groups_seeds(G, only_seed=False):
+def metis_partition_groups_seeds(G, only_seed=False, maximum_group_size=MAXIMUM_COMPONENT_SIZE):
     CC = [cc for cc in nx.connected_components(G)]
     GL = []
     for subV in CC:
-        if len(subV) > MAXIMUM_COMPONENT_SIZE:
+        if len(subV) > maximum_group_size:
             # use metis to split the graph
             subG = nx.subgraph(G, subV)
-            nparts = int(len(subV)/MAXIMUM_COMPONENT_SIZE + 1)
+            nparts = int(len(subV)/maximum_group_size + 1)
             (edgecuts, parts) = nxmetis.partition(subG, nparts)
             # add to group list
             GL += parts
