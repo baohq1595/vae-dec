@@ -2,6 +2,7 @@ import itertools as it
 import numpy as np
 import networkx as nx
 import nxmetis
+import copy
 
 import sys
 sys.path.append('.')
@@ -9,12 +10,12 @@ sys.path.append('.')
 from dataloader.utils import load_meta_reads
 
 LENGTH_OF_Q_MERS = 20   # q (short: 20, long: 30, 3species: 10)
-NUM_SHARED_READS = 5    # m (short: 5, long: 45, 3species: 3)
+NUM_SHARED_READS = 45    # m (short: 5, long: 45, 3species: 3)
 
 # parameters for graph partitioning
 MAXIMUM_COMPONENT_SIZE = 200 # R*, S*: 200
 
-def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS):
+def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS, num_shared_reads=NUM_SHARED_READS):
     '''
     Build overlapping graph
     '''
@@ -41,7 +42,7 @@ def build_overlap_graph(reads, labels, qmer_length=LENGTH_OF_Q_MERS):
                 E[e_curr] += 1 # Number of connected lines between read a and b
             else:
                 E[e_curr] = 1
-    E_Filtered = {kv[0]: kv[1] for kv in E.items() if kv[1] >= NUM_SHARED_READS}
+    E_Filtered = {kv[0]: kv[1] for kv in E.items() if kv[1] >= num_shared_reads}
     
     print('Building graph...')
     G = nx.Graph()
@@ -76,6 +77,45 @@ def metis_partition_groups_seeds(G, only_seed=False, maximum_group_size=MAXIMUM_
         for p in GL:
             pG = nx.subgraph(G, p)
             SL += [nx.maximal_independent_set(G)]
+
+    return GL, SL
+
+def bimeta_partition(G: nx.Graph, maximum_seeds=MAXIMUM_COMPONENT_SIZE):
+    GL = []
+    SL = []
+    temp_G = copy.copy(G)
+    traversed_nodes = []
+    for i, node in enumerate(temp_G.nodes):
+        if node in traversed_nodes:
+            continue
+        SGi = []
+        Gi = []
+        SGi.append(node)
+        Gi.append(node)
+        traversed_nodes.append(node)
+        for grp_node in Gi:
+            neighbors = list(temp_G.neighbors(grp_node))
+            if neighbors:
+                add_node = None
+                for n_node in neighbors:
+                    if n_node not in traversed_nodes:
+                        add_node = n_node
+                        traversed_nodes.append(n_node)
+                        break
+
+                # random_first_neighbor = neighbors[0]
+                # # temp_G.remove_node(random_first_neighbor)
+                # traversed_nodes.append(random_first_neighbor)
+                if add_node:
+                    if add_node not in SGi:
+                        SGi.append(add_node)
+                    Gi.append(add_node)
+
+            if (len(SGi) >= maximum_seeds) or (not temp_G.nodes):
+                break
+
+        SL.append(SGi)
+        GL.append(Gi)
 
     return GL, SL
 

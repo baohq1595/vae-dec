@@ -11,7 +11,7 @@ from networkx.readwrite import json_graph
 import sys
 sys.path.append('.')
 from dataloader.utils import load_meta_reads, compute_kmer_dist, create_document, create_corpus
-from dataloader.graph import build_overlap_graph, metis_partition_groups_seeds
+from dataloader.graph import build_overlap_graph, metis_partition_groups_seeds, bimeta_partition
 from dataloader.utils import generate_k_mer_corpus, ensure_gene_length
 
 class GenomeDataset_v3(Dataset):
@@ -32,8 +32,8 @@ class GenomeDataset_v3(Dataset):
         # Read fasta dataset
         print('Reading fna file...')
         self.reads, self.labels = load_meta_reads(fna_file, type='fasta')
-        self.reads = self.reads
-        self.labels = self.labels
+        # self.reads = self.reads[:5000]
+        # self.labels = self.labels[:5000]
 
         print('Creating document from reads...')
         dictionary, documents = create_document(self.reads, kmers)
@@ -43,6 +43,8 @@ class GenomeDataset_v3(Dataset):
 
         self.groups = []
         self.seeds = []
+        self.groups_v2 = []
+        self.seeds_v2 = []
 
         if is_deserialize:
             print('Deserializing data...')
@@ -52,7 +54,8 @@ class GenomeDataset_v3(Dataset):
             print('Building graph from scratch...')
             graph = build_overlap_graph(self.reads, self.labels, qmers)
             print('Partitioning graph...')
-            self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed, maximum_group_size=maximum_group_size)
+            # self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed, maximum_group_size=maximum_group_size)
+            self.groups, self.seeds = bimeta_partition(graph)
 
         if is_serialize:
             print('Serializing data to...', graph_file)
@@ -367,8 +370,9 @@ if __name__ == "__main__":
     # from transform.gene_transforms import numerize_genome_str
     # metagene_dataset = GenomeDataset('data/gene/L1.fna', is_normalize=True)
     metagene_dataset = GenomeDataset_v3('data/gene/L1.fna', [4], 20, graph_file='data/gene/processed/L1.json', is_deserialize=False, is_normalize=False)
-    for i in range(metagene_dataset.__len__()):
-        print(metagene_dataset.__getitem__(i)[:10])
+    print(metagene_dataset.seeds_v2[:1000])
+    # for i in range(metagene_dataset.__len__()):
+        # print(metagene_dataset.__getitem__(i)[:10])
     # for i in range(5):
     #     print(metagene_dataset.__getitem__(i))
 
