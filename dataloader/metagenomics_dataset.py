@@ -20,8 +20,8 @@ class GenomeDataset_v3(Dataset):
     An optimization step based on graph opertation is used to merge reads that
     have overlapping reads into a completed genome.
     '''
-    def __init__(self, fna_file, kmers: list, qmers, maximum_group_size=5000, only_seed=False, is_normalize=True,
-                    graph_file=None, is_serialize=False, is_deserialize=False):
+    def __init__(self, fna_file, kmers: list, qmers, num_shared_reads, maximum_group_size=5000, only_seed=False,
+                    is_normalize=True, graph_file=None, is_serialize=False, is_deserialize=False):
         '''
         Args:
             kmers: a list of kmer values. 
@@ -52,7 +52,7 @@ class GenomeDataset_v3(Dataset):
         else:
             # Build overlapping (reads) graph
             print('Building graph from scratch...')
-            graph = build_overlap_graph(self.reads, self.labels, qmers)
+            graph = build_overlap_graph(self.reads, self.labels, qmers, num_shared_reads=num_shared_reads)
             print('Partitioning graph...')
             # self.groups, self.seeds = metis_partition_groups_seeds(graph, only_seed=only_seed, maximum_group_size=maximum_group_size)
             self.groups, self.seeds = bimeta_partition(graph)
